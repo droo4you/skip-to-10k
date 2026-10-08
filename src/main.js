@@ -62,6 +62,7 @@ function onKey(code) {
     if (code === 'Escape' || code === 'KeyP') { G8.paused = !G8.paused; return; }
     if (G8.paused) return;
     if (ACTION_KEYS.includes(code)) edge.skip = true;
+    if (code === 'Space' && spaceCallsRc(G8.run)) edge.rc = true;
     if (code === 'KeyX' || code === 'ShiftLeft' || code === 'ShiftRight') edge.bounce = true;
     if (code === 'KeyC' || code === 'KeyR') edge.rc = true;
     return;
@@ -239,7 +240,7 @@ const TUT_CAPS = {
   kevin: ['up', 'PUMPS, BULLS, GREEN WHALES AND KEVIN LAUNCH YOU UP'],
   dump: ['dump', 'RED WHALES AND BEARS DUMP YOU. DODGE THEM'],
   bounce: ['bounce', 'X OR THE BOUNCE BUTTON: BOUNCE OFF THIN AIR'],
-  rc: ['rc', 'C OR THE RC BUTTON: RC LIFTS THE ROCK'],
+  rc: ['rc', 'C, SPACE IN THE AIR, OR THE RC BUTTON: RC LIFTS THE ROCK'],
   rejected: ['rej', 'THE ATH LINE REJECTS SLOW ROCKS. UPGRADE VOLUME'],
   breakout: ['brk', 'BROKE THE ATH. NOW IT IS SUPPORT'],
   era: ['era', 'NEW ERA. LEFT TO RIGHT IS TIME. HEIGHT IS PRICE'],
@@ -426,7 +427,7 @@ function update(dt) {
     acc += Math.min(sdt, 0.1);
     G8.hintT += dt;
     if (DEMO || G8.tut) demoInput();
-    const input = { tilt: G8.tut ? SIM.botInput(run).tilt : tiltInput(), skip: edge.skip, fart: edge.bounce, rc: edge.rc };
+    const input = { tilt: G8.tut ? SIM.botInput(run).tilt : tiltInput(), skip: edge.skip, bounce: edge.bounce, rc: edge.rc };
     edge.skip = edge.bounce = edge.rc = false;
     while (acc >= SIM.DT) {
       SIM.step(run, G8.tut ? SIM.botInput(run) : input);
@@ -678,14 +679,14 @@ function drawHUD() {
       drawBoostBtn(BOOST_BTNS.rc, 'C', 'RC LIFT', run.rc, '#1cb6d8', want);
     }
     if (boostWanted(run) && (run.bounces || run.rc) && !G8.tut && (G8.time * 3 | 0) % 2 === 0) {
-      const t = G8.touch ? (run.rc ? 'TAP RC!' : 'TAP BOUNCE!') : (run.rc ? 'PRESS C: RC LIFT!' : 'PRESS X: BOUNCE!');
+      const t = G8.touch ? (run.rc ? 'TAP RC!' : 'TAP BOUNCE!') : (run.rc ? 'SPACE OR C: RC LIFT!' : 'PRESS X: BOUNCE!');
       drawTextOutlined(ctx, t, sx(run.x), Math.max(40, sy(run.alt) - 34), '#7fe3ff', 1);
     }
     if (run.streak >= 2) drawTextOutlined(ctx, run.streak + 'X STREAK', W / 2, 44, run.streak >= 5 ? '#ff9f3a' : '#ffe066', 1);
     if (save.runs < 3 && G8.hintT < 12 && !G8.tut) {
       const tip = G8.hintT < 4 ? (G8.touch ? 'TAP AS THE ROCK HITS THE WATER' : 'TAP SPACE AS THE ROCK HITS THE WATER')
         : G8.hintT < 8 ? (G8.touch ? 'HOLD UP OR DOWN TO TILT' : 'UP AND DOWN TILT THE ROCK')
-        : (G8.touch ? 'BOUNCE AND RC BUTTONS FOR BOOSTS' : 'X TO BOUNCE. C TO CALL RC');
+        : (G8.touch ? 'BOUNCE AND RC BUTTONS FOR BOOSTS' : 'X BOUNCES. C OR SPACE IN THE AIR CALLS RC');
       drawTextOutlined(ctx, tip, W / 2, 104, '#fff', 1);
     }
   }
@@ -699,6 +700,12 @@ function drawHUD() {
   }
 }
 // boosts are worth it when the rock is slowing down near the water
+// SPACE doubles as the RC button while the rock is up in the air. Near the water it stays a skip tap only,
+// so timing a skip never burns an RC lift.
+function spaceCallsRc(run) {
+  if (!run || run.phase !== 'fly' || run.rc <= 0 || run.rcT > 0 || run.iceSlide) return false;
+  return run.vy > 0 ? run.alt > 25 : run.alt / Math.max(1, -run.vy) > 0.35;
+}
 function boostWanted(run) { return run.phase === 'fly' && run.vx < 240 && run.alt < 70 && (run.bounces > 0 || run.rc > 0) && run.rcT <= 0; }
 // a ring of sparks where the rock bounced off thin air
 function bounceRing(x, alt) {

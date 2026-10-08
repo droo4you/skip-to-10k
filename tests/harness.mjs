@@ -39,6 +39,22 @@ if (!(pow > 0.95 && ang > 8 && ang < 24)) throw new Error('drag mapping off: pow
 ptr('up', 246, 134); frames(2);
 if (run('G8.screen') !== 'fly') throw new Error('drag did not throw');
 console.log('drag throw: angle', Math.round(ang), 'vx', run('Math.round(G8.run.vx)'));
+// boost keys: X bounces, C calls RC, SPACE calls RC only while the rock is up in the air
+{
+  const b0 = run('G8.run.bounces'); key('KeyX'); frames(1); key('KeyX', true);
+  if (run('G8.run.bounces') !== b0 - 1) throw new Error('X did not bounce');
+  frames(40);
+  run('G8.run.alt = 120; G8.run.vy = 150; G8.run.rcT = 0');
+  const r0 = run('G8.run.rc'); key('Space'); frames(1); key('Space', true);
+  if (run('G8.run.rc') !== r0 - 1) throw new Error('SPACE in the air did not call RC');
+  frames(80);
+  run('G8.run.alt = 4; G8.run.vy = -200; G8.run.rcT = 0');
+  const r1 = run('G8.run.rc'); key('Space'); frames(1); key('Space', true);
+  if (run('G8.run.rc') !== r1) throw new Error('SPACE near the water burned an RC lift');
+  run('G8.run.rcT = 0'); key('KeyC'); frames(1); key('KeyC', true);
+  if (r1 > 0 && run('G8.run.rc') !== r1 - 1) throw new Error('C did not call RC');
+  console.log('boost keys ok: X bounce, SPACE-in-air RC, C RC');
+}
 if (run('G8.screen') !== 'fly') throw new Error('not flying: ' + run('G8.screen'));
 // fly with the bot pressing keys, visiting every era by warping the rock forward
 let warps = 0;

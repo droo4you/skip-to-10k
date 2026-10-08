@@ -34,6 +34,8 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
   prompt over the rock, whenever the rock is slow and low. Results list boosts left unused. Start: 3 bounces, 2 RC.
 - v0.5: the user asked to swap the fart boost for bounces (X = skip off thin air, beach-ball pickups).
   The fartcoin clouds on the lake (MINI PUMP) stayed: they were in the original brief.
+- SPACE doubles as RC LIFT (user request) but only while the rock is in the air (`spaceCallsRc`): near the water
+  it is a skip tap only, so skip timing never burns RC. harness.mjs asserts X, C and SPACE actually fire.
 
 ## Working rules
 - After any sim change: `node tests/sim.mjs` (perfect-tap bot balance table) and `node tests/harness.mjs`
