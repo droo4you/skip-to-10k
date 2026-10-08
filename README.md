@@ -4,7 +4,8 @@ A Droober & RC rock-skipping saga. In 2017 somebody made 100 rocks. They do noth
 
 Throw it, skip it across eleven years of crypto history, and try to break $10K. The chart goes sideways a lot.
 
-- Throw: mash SPACE (or tap) to sprint down the dock, hold to aim, let go to throw. Release near the edge for a bonus.
+- Throw: drag back anywhere and let go (further = more power, aim into the green skip zone), or UP/DOWN + hold SPACE.
+- New here? Hit HOW TO PLAY on the title screen and watch a good run.
 - Fly: SPACE (or tap) as the rock hits the water for a perfect skip. UP/DOWN tilt. X fart boost. C calls RC.
 - Spend gwei at the dock shop between runs: upgrades, Ether Rocks (each costs more than the last), missions and ranks.
 

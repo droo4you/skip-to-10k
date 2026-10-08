@@ -175,7 +175,7 @@ const SIM = (() => {
 
   // power is 0..1 from the run-up; a release on the line can push it past 1
   function throwRock(run, angleDeg, power, x = DOCK_X) {
-    const a = angleDeg * Math.PI / 180, sp = run.s.throwMax * Math.max(0.2, Math.min(1.2, power));
+    const a = angleDeg * Math.PI / 180, sp = run.s.throwMax * Math.max(0.45, Math.min(1.2, power)); // below ~0.35 the rock sank on first contact
     run.x = x;
     run.vx = Math.cos(a) * sp; run.vy = Math.sin(a) * sp;
     run.phase = 'fly';

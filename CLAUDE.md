@@ -13,10 +13,14 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
 - The joke is sideways chop: most runs live between $1K and $3K. Keep it affectionate, no chain favoritism,
   no logos. Characters are original homages (Kevin, apes, Skrumpeys, suits, whales, fartcoin clouds).
 
-## The throw (v0.2, replaced a slingshot drag the user said felt bad)
-- Run-up on a long dock: mash SPACE/tap to sprint, hold past 0.16s to raise the arm (angle climbs ~58 deg/s),
-  let go to throw. Power = run speed. Releasing within 16px of the dock end = ON THE LINE (x1.12).
-  Running off the end drops Droober in the lake and resets. Same input on keyboard and touch.
+## The throw (v0.3)
+- v0.1 slingshot: throws under ~35% power sank on first contact, so players saw "a couple feet". v0.2 run-up
+  (mash to sprint): the user hated mashing. v0.3 is pull-back again, tuned: drag back from ANYWHERE, 55 canvas px
+  = full power, angle from the drag direction, green SKIP ZONE wedge (8-24 deg), live trajectory preview run through
+  the real sim. Keyboard: UP/DOWN aim + hold SPACE (fills in 1.1s, holds at max). Throw power maps to 0.45..1 and
+  `throwRock` floors at 0.45, so every throw skips.
+- HOW TO PLAY (title "I" button or I key): a narrated bot run on TUT_SEED 30 with TUT_UP upgrades, bot input every
+  sim step so it is deterministic. Cut at 70s. Never touches the save. Re-pick the seed offline if the sim changes.
 
 ## Files
 - `src/sim.js` pure physics, entities, upgrades, eras. No DOM. Loaded by tests through vm/require.
@@ -30,7 +34,8 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
   (stubbed DOM, plays every screen). After copy or meta changes: `node tests/meta.mjs` (every string renders in the
   bitmap font, news in date order, missions complete). A human-ish first run should land around day 300-500.
 - Screenshots without the Chrome extension: headless Chrome with `?demo=<day>[&alt=<alt>]` or `&screen=shop|rocks|missions|runup|results`, `&touch`,
-  `--virtual-time-budget=2500`. Demo mode is a bot that throws and plays from that day.
+  `--virtual-time-budget=800`. Headless Chrome barely ticks rAF, so add `&ff=<seconds>` to fast-forward
+  (e.g. `?demo=0&screen=tut&ff=30`). Demo mode is a bot that throws and plays from that day.
 - In-game copy: uppercase bitmap font only (see `GLYPHS`). No em dashes, say crypto not Web3, never "rug".
   Signed droober only.
 - Don't fade outlined text with globalAlpha: the stacked outline passes smear. Slide it instead.

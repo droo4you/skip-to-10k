@@ -20,11 +20,11 @@ function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save));
 Audio8.muted = save.muted; Audio8.musicOn = save.music;
 
 // ---------- state ----------
-const DOCK_START = -236, DOCK_END = 40, RUN_VMAX = 220;
+const DOCK_START = -150, DOCK_END = 40;
 const G8 = {
   screen: 'title', time: 0, run: null,
   camX: 0, camAlt: 0, shake: 0, slow: 0,
-  ru: null,                         // run-up on the dock
+  aim: null, tut: null, thrownT: 0,
   texts: [], parts: [], banner: null, res: null, paused: false,
   shopTab: 0, shopSel: 0, rockSel: 0,
   rc: { x: 40, alt: 70 }, touch: false, hintT: 0,
@@ -43,17 +43,18 @@ addEventListener('keydown', e => {
   keys.add(e.code);
   onKey(e.code);
 });
-addEventListener('keyup', e => { keys.delete(e.code); if (ACTION_KEYS.includes(e.code) && G8.screen === 'runup') ruRelease(); });
-addEventListener('blur', () => { keys.clear(); if (G8.ru) G8.ru.down = false; });
+addEventListener('keyup', e => { keys.delete(e.code); if (ACTION_KEYS.includes(e.code) && G8.screen === 'aim' && !G8.tut) aimRelease(); });
+addEventListener('blur', () => { keys.clear(); if (G8.aim) { G8.aim.charging = false; G8.aim.drag = null; } });
 
 function onKey(code) {
   if (code === 'KeyM') { save.muted = !save.muted; Audio8.setMuted(save.muted); persist(); return; }
   if (code === 'KeyN') { save.music = !save.music; Audio8.setMusic(save.music); persist(); return; }
   const s = G8.screen;
-  if (s === 'title') { if (ACTION_KEYS.includes(code)) toRunup(); return; }
-  if (s === 'runup') {
-    if (ACTION_KEYS.includes(code)) ruPress();
-    if ((code === 'Escape' || code === 'KeyS') && G8.ru.phase === 'ready') toShop();
+  if (G8.tut) { if (G8.tut.t > 0.4) endTut(); return; }
+  if (s === 'title') { if (code === 'KeyI' || code === 'KeyH') startTut(); else if (ACTION_KEYS.includes(code)) toAim(); return; }
+  if (s === 'aim') {
+    if (ACTION_KEYS.includes(code) && !G8.aim.drag) { G8.aim.charging = true; G8.aim.chargeT = 0; G8.aim.power = 0; }
+    if (code === 'Escape' || code === 'Tab') toShop();
     return;
   }
   if (s === 'fly') {
@@ -66,7 +67,7 @@ function onKey(code) {
   }
   if (s === 'results') {
     if (G8.res && G8.time - G8.res.at < 0.6) return; // don't skip the results by mashing
-    if (code === 'KeyR') toRunup();
+    if (code === 'KeyR') toAim();
     else if (ACTION_KEYS.includes(code) || code === 'Escape') toShop();
     return;
   }
@@ -94,17 +95,18 @@ cv.addEventListener('pointerdown', e => {
   try { cv.setPointerCapture(e.pointerId); } catch {}
   const p = canvasPt(e);
   const s = G8.screen;
-  if (s === 'title') return toRunup();
+  if (G8.tut) { if (G8.tut.t > 0.4) endTut(); return; }
+  if (s === 'title') return hitRect(p, INFO_BTN) ? startTut() : toAim();
   if (s === 'results') {
     if (G8.time - G8.res.at < 0.6) return;
-    if (hitRect(p, RES_AGAIN)) return toRunup();
+    if (hitRect(p, RES_AGAIN)) return toAim();
     return toShop();
   }
   if (s === 'shop') return shopClick(p);
-  if (s === 'runup') {
-    if (hitRect(p, SHOP_BTN) && G8.ru.phase === 'ready') return toShop();
-    pointers.set(e.pointerId, { ...p, btn: 'runup' });
-    return ruPress();
+  if (s === 'aim') {
+    if (hitRect(p, SHOP_BTN)) return toShop();
+    pointers.set(e.pointerId, { ...p, btn: 'aim' });
+    return aimPress(p);
   }
   if (s === 'fly') {
     if (G8.paused) { G8.paused = false; return; }
@@ -120,12 +122,13 @@ cv.addEventListener('pointermove', e => {
   if (!pointers.has(e.pointerId)) return;
   const p = canvasPt(e), q = pointers.get(e.pointerId);
   q.x = p.x; q.y = p.y;
+  if (q.btn === 'aim') aimMove(p);
   if (q.btn === 'up' || q.btn === 'down') q.btn = btnAt(p) || q.btn;
 });
 function endPointer(e) {
   const q = pointers.get(e.pointerId);
   pointers.delete(e.pointerId);
-  if (q && q.btn === 'runup' && G8.screen === 'runup') ruRelease();
+  if (q && q.btn === 'aim' && G8.screen === 'aim') aimRelease();
 }
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
@@ -139,82 +142,162 @@ function tiltInput() {
   return Math.max(-1, Math.min(1, t));
 }
 
-// ---------- the run-up ----------
-// Mash to sprint Droober down the dock. Hold to raise the throwing arm. Let go to throw.
-// Let go close to the end of the dock for a bonus. Run off the end and you swim.
-const HOLD_T = 0.16;
-function newRunup() {
-  return { phase: 'ready', x: DOCK_START + 26, v: 0, down: false, downT: 0, angle: 0, taps: 0, fellT: 0, stepT: 0, lastTap: -9 };
+// ---------- the throw: pull back and let go ----------
+// Drag back from anywhere on the screen: pull left = power, pull down = higher angle. Let go to throw.
+// Keyboard: UP/DOWN aim, hold SPACE to fill power, let go to throw.
+const PULL_FULL = 55;                       // canvas px of drag for full power
+const HAND_X = DOCK_END - 8, HAND_ALT = 38;  // where the rock leaves Droober's hand
+const SKIP_ZONE = [8, 24];                  // angles that skip best
+function newAim() { return { angle: 15, power: 0, drag: null, charging: false, chargeT: 0, warnT: 0, preview: null, previewKey: '' }; }
+function aimFromDrag(a) {
+  const d = a.drag, dx = d.x0 - d.x, dy = d.y - d.y0;
+  const len = Math.hypot(dx, dy);
+  a.power = Math.min(1, len / PULL_FULL);
+  if (len < 3) return;
+  let ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  if (dx < 0) ang = dy > 0 ? 60 : -5;
+  a.angle = Math.max(-5, Math.min(60, ang));
 }
-function ruPress() {
-  const ru = G8.ru;
-  if (!ru || ru.phase === 'fell' || ru.phase === 'thrown') return;
-  if (ru.phase === 'ready') ru.phase = 'run';
-  ru.down = true; ru.downT = G8.time;
-  if (ru.phase === 'run') {
-    ru.v += 30 * Math.pow(Math.max(0, 1 - ru.v / RUN_VMAX), 0.7) + 4;
-    ru.taps++; ru.lastTap = G8.time;
-    Audio8.sfx('step', ru.v / RUN_VMAX);
-    for (let i = 0; i < 2; i++) G8.parts.push({ x: ru.x - 6, alt: 23, vx: -30 - Math.random() * 40, vy: 20 + Math.random() * 30, t: 0, life: 0.4, color: '#c8a878', kind: 'dot' });
-  }
+function aimPress(p) { const a = G8.aim; a.drag = { x0: p.x, y0: p.y, x: p.x, y: p.y }; a.power = 0; }
+function aimMove(p) { const a = G8.aim; if (!a.drag) return; a.drag.x = p.x; a.drag.y = p.y; aimFromDrag(a); }
+function aimRelease() {
+  const a = G8.aim;
+  if (!a.drag && !a.charging) return;
+  a.drag = null; a.charging = false;
+  if (a.power < 0.1) { a.power = 0; a.warnT = 1.6; return; }
+  doThrow();
 }
-function ruRelease() {
-  const ru = G8.ru;
-  if (!ru) return;
-  ru.down = false;
-  if (ru.phase === 'windup') ruThrow();
-}
-function ruBonus(ru) {
-  const d = DOCK_END - ru.x;
-  return d < 16 ? 1.12 : d < 50 ? 1.05 : 1;
-}
-function ruPower(ru) { return Math.min(1, ru.v / RUN_VMAX) * ruBonus(ru); }
-function ruThrow() {
-  const ru = G8.ru, run = G8.run;
-  const b = ruBonus(ru), power = ruPower(ru);
-  if (power < 0.05) { ru.phase = 'run'; return; }
-  ru.phase = 'thrown';
-  SIM.throwRock(run, ru.angle, power, ru.x + 8);
-  run.alt = 40 + Math.sin(ru.angle * Math.PI / 180) * 8;
-  if (b > 1.1) { run.counts.line = 1; addText('ON THE LINE', ru.x + 8, 70, '#ffe066'); Audio8.sfx('line'); }
-  else if (b > 1) addText('GOOD RELEASE', ru.x + 8, 70, '#7be08a');
-  G8.screen = 'fly'; G8.hintT = 0;
-  G8.rc = { x: ru.x - 10, alt: 90 };
+const throwPower = p => 0.45 + 0.55 * p;
+function doThrow() {
+  const a = G8.aim, run = G8.run;
+  SIM.throwRock(run, a.angle, throwPower(a.power), HAND_X);
+  run.alt = HAND_ALT;
+  const inZone = a.angle >= SKIP_ZONE[0] && a.angle <= SKIP_ZONE[1];
+  if (a.power > 0.95 && inZone) { run.counts.line = 1; addText('PERFECT THROW', HAND_X, 70, '#ffe066'); Audio8.sfx('line'); }
+  G8.screen = 'fly'; G8.hintT = 0; G8.thrownT = G8.time;
+  G8.rc = { x: HAND_X - 16, alt: 80 };
   showBanner(SIM.ERAS[0].name, SIM.ERAS[0].sub);
 }
-function updateRunup(dt) {
-  const ru = G8.ru;
-  if (ru.phase === 'fell') {
-    ru.fellT += dt;
-    if (ru.fellT > 1.8) { G8.ru = newRunup(); G8.parts = []; }
+function updateAim(dt) {
+  const a = G8.aim;
+  a.warnT = Math.max(0, a.warnT - dt);
+  if (!a.drag) {
+    if (keys.has('ArrowUp') || keys.has('KeyW')) a.angle = Math.min(60, a.angle + 45 * dt);
+    if (keys.has('ArrowDown') || keys.has('KeyS')) a.angle = Math.max(-5, a.angle - 45 * dt);
+  }
+  if (a.charging) {
+    a.chargeT += dt;
+    const prev = a.power;
+    a.power = 1 - Math.pow(1 - Math.min(1, a.chargeT / 1.1), 2); // fills in 1.1s, eases in, then holds at max
+    if ((prev * 10 | 0) !== (a.power * 10 | 0)) Audio8.sfx('windup', a.power * 60);
+  }
+  // trajectory preview through the real sim: the first arc and a couple of perfect skips
+  const key = Math.round(a.angle * 2) + ':' + Math.round(a.power * 40);
+  if (key !== a.previewKey) {
+    a.previewKey = key;
+    const t = SIM.newRun(G8.tut ? TUT_UP : save.up, 1);
+    t.ents = []; t.chunks = 1e9;
+    SIM.throwRock(t, a.angle, throwPower(Math.max(a.power, 0.1)), HAND_X); t.alt = HAND_ALT;
+    const pts = [];
+    for (let i = 0; i < 1400 && t.phase === 'fly' && t.skips < 3; i++) {
+      SIM.step(t, { skip: t.alt < 5 && t.vy < 0 });
+      if (i % 5 === 0) pts.push([t.x, t.alt, t.skips]);
+    }
+    t.events.length = 0;
+    a.preview = pts;
+  }
+}
+
+// ---------- how to play: a narrated demo run ----------
+// The bot plays a well-upgraded run while captions explain what is happening. Nothing is saved.
+const TUT_UP = { arm: 3, rock: 3, hands: 3, aero: 3, farts: 3, rc: 3, volume: 4 };
+// Seed 30 was picked offline: in ~90s it gets rejected at the ATH, breaks it, farts, calls RC and reaches today.
+const TUT_SEED = 30;
+function startTut() {
+  toAim();
+  G8.tut = { t: 0, caps: [], cap: null, seen: new Set(), end: 0 };
+  G8.run = SIM.newRun(TUT_UP, TUT_SEED);
+  tutCaption('PULL BACK ANYWHERE TO AIM. FURTHER BACK = MORE POWER');
+  tutCaption('AIM LOW. THE GREEN SKIP ZONE SKIPS BEST');
+}
+function endTut() { G8.tut = null; G8.screen = 'title'; G8.run = null; G8.texts = []; G8.parts = []; G8.news = null; G8.banner = null; }
+function tutCaption(text, key) {
+  const T = G8.tut;
+  if (!T || (key && T.seen.has(key))) return;
+  if (key) T.seen.add(key);
+  T.caps.push(text);
+}
+const TUT_CAPS = {
+  perfect: ['perfect', 'PERFECT SKIP. TAP WHEN THE RING TURNS YELLOW. KEEPS YOUR SPEED'],
+  gem: ['gem', 'GEMS AND DISTANCE PAY GWEI. SPEND IT ON UPGRADES'],
+  pump: ['up', 'PUMPS, BULLS, GREEN WHALES AND KEVIN LAUNCH YOU UP'],
+  whale: ['up', 'PUMPS, BULLS, GREEN WHALES AND KEVIN LAUNCH YOU UP'],
+  kevin: ['up', 'PUMPS, BULLS, GREEN WHALES AND KEVIN LAUNCH YOU UP'],
+  dump: ['dump', 'RED WHALES AND BEARS DUMP YOU. DODGE THEM'],
+  fart: ['fart', 'X OR THE FART BUTTON: BANANA FART BOOST'],
+  rc: ['rc', 'C OR THE RC BUTTON: RC LIFTS THE ROCK'],
+  rejected: ['rej', 'THE ATH LINE REJECTS SLOW ROCKS. UPGRADE VOLUME'],
+  breakout: ['brk', 'BROKE THE ATH. NOW IT IS SUPPORT'],
+  era: ['era', 'NEW ERA. LEFT TO RIGHT IS TIME. HEIGHT IS PRICE'],
+  airdrop: ['air', 'AIRDROPS GIVE FREE STUFF. USUALLY'],
+  scam: ['air', 'AIRDROPS GIVE FREE STUFF. USUALLY'],
+  splash: ['steep', 'TOO STEEP = SPLASH. COME IN FLAT'],
+  ice: ['ice', 'CRYPTO WINTER: THE LAKE FROZE. TAP TO HOP'],
+  suit: ['suit', 'THE SUITS BRING INFLOWS. FREE SPEED'],
+};
+function updateTut(dt) {
+  const T = G8.tut;
+  if (!T) return;
+  T.t += dt;
+  if (T.cap) { T.cap.t += dt; if (T.cap.t > 3.2 || (T.cap.t > 1.6 && T.caps.length)) T.cap = null; }
+  if (!T.cap && T.caps.length) T.cap = { text: T.caps.shift(), t: 0 };
+  if (G8.screen === 'aim') {
+    // the ghost hand pulls back for 2.4s, then lets go
+    const a = G8.aim, k = Math.min(1, Math.max(0, (T.t - 0.8) / 1.6));
+    a.drag = { x0: 300, y0: 120, x: 300 - 52 * k, y: 120 + 15 * k };
+    aimFromDrag(a);
+    if (T.t > 3.6) { a.drag = null; a.angle = 16; a.power = 1; doThrow(); tutCaption('TAP SPACE OR THE SCREEN AS THE ROCK HITS THE WATER'); tutCaption('UP AND DOWN TILT THE ROCK. DIVE FOR SPEED'); }
     return;
   }
-  if (ru.phase === 'thrown') { ru.v = Math.max(0, ru.v - 300 * dt); ru.x = Math.min(DOCK_END, ru.x + ru.v * dt); return; }
-  if (ru.down && ru.phase === 'run' && G8.time - ru.downT > HOLD_T) { ru.phase = 'windup'; ru.angle = 0; }
-  if (ru.phase === 'windup') {
-    const prev = ru.angle;
-    ru.angle = Math.min(60, (G8.time - ru.downT - HOLD_T) * 58);
-    if ((prev / 4 | 0) !== (ru.angle / 4 | 0)) Audio8.sfx('windup', ru.angle);
+  // the demo makes its point in about a minute; cut it there
+  if (!T.end && T.t > 70 && G8.run.phase === 'fly') { T.res = SIM.results(G8.run); T.end = 0.001; T.cut = true; }
+  if (T.end) { T.end += dt; if (T.end > 4.5) endTut(); }
+}
+function tutEvents(run) {
+  for (const ev of run.events) {
+    const c = TUT_CAPS[ev.type];
+    if (c) tutCaption(c[1], c[0]);
+    if (ev.text === 'CHOP') tutCaption('CRABS. SIDEWAYS CHOP FLATTENS YOUR SKIPS', 'crab');
+    if (ev.type === 'text' && /STREAK/.test(ev.text || '')) tutCaption('STREAKS OF PERFECT SKIPS ADD SPEED', 'streak');
   }
-  ru.v = Math.max(0, ru.v - (ru.phase === 'windup' ? 32 : 52) * dt);
-  ru.x += ru.v * dt;
-  ru.stepT += dt * (2 + ru.v / 25);
-  if (ru.x > DOCK_END + 6) {
-    ru.phase = 'fell'; ru.fellT = 0; ru.down = false;
-    Audio8.sfx('fall');
-    say('rc', 'fell');
-    setTimeout(() => { if (G8.ru === ru) splash(DOCK_END + 26, 18, true); }, 380);
+}
+function drawTut() {
+  const T = G8.tut;
+  if (!T) return;
+  drawTextOutlined(ctx, 'HOW TO PLAY. TAP OR ESC TO EXIT', W / 2, G8.screen === 'aim' ? 24 : H - 14, '#b8a8e8', 1);
+  if (G8.screen === 'aim') drawGhostHand(300, 120, 248, 135, (T.t - 0.8) / 1.6);
+  if (T.cap) {
+    const w = textWidth(T.cap.text) + 16, x = (W - w) / 2, y = H - 64;
+    px(ctx, '#22163a', x - 2, y - 2, w + 4, 19); px(ctx, '#ffe066', x, y, w, 15);
+    drawText(ctx, T.cap.text, x + 8, y + 4, '#22163a');
+  }
+  if (T.end) {
+    const r = T.res;
+    panel(110, 70, 260, 70);
+    drawTextC(ctx, (T.cut ? 'AND IT KEEPS GOING. ' : 'THAT RUN REACHED ') + r.date, W / 2, 82, '#22163a');
+    drawTextC(ctx, 'DAY ' + r.days + '. PEAK ' + fmtPrice(r.peak), W / 2, 96, '#7a4a8a');
+    drawTextC(ctx, 'UPGRADE UP AND IT IS YOURS. NOW YOU TRY', W / 2, 116, '#e5487f');
   }
 }
 
 // ---------- screen changes ----------
-function toRunup() {
-  G8.screen = 'runup';
+function toAim() {
+  G8.screen = 'aim';
   G8.run = SIM.newRun(save.up, (Math.random() * 2 ** 31) >>> 0);
-  G8.ru = newRunup();
-  G8.camX = DOCK_START - 30; G8.camAlt = 0; G8.texts = []; G8.parts = []; G8.banner = null; G8.paused = false;
+  G8.aim = newAim();
+  G8.camX = HAND_X - 150; G8.camAlt = 0; G8.texts = []; G8.parts = []; G8.banner = null; G8.paused = false;
   G8.news = null; G8.newsI = 0; G8.bubble = null; G8.bubbleCd = 5; G8.slow = 0;
-  G8.rc = { x: DOCK_START + 20, alt: 90 };
+  G8.rc = { x: HAND_X - 30, alt: 86 };
   edge.skip = edge.fart = edge.rc = false;
   pointers.clear();
   Audio8.sfx('menu');
@@ -222,6 +305,7 @@ function toRunup() {
 function toShop() { G8.screen = 'shop'; G8.shopSel = SIM.UPGRADES.length; G8.rockSel = Math.max(0, save.rocks.indexOf(save.rock)); Audio8.sfx('menu'); }
 function finishRun() {
   const run = G8.run;
+  if (G8.tut) { G8.tut.res = SIM.results(run); G8.tut.end = 0.001; return; }
   const r = SIM.results(run);
   const mult = META.multiplier(save);
   r.earned = Math.round(r.earned * mult); r.mult = mult;
@@ -323,27 +407,27 @@ function update(dt) {
   shopFlash = Math.max(0, shopFlash - dt);
   G8.shake = Math.max(0, G8.shake - dt * 20);
 
-  if (G8.screen === 'runup') {
-    updateRunup(dt);
-    const ru = G8.ru;
-    const tx = Math.min(DOCK_END - 200, Math.max(DOCK_START - 30, ru.x - 170));
-    G8.camX += (tx - G8.camX) * Math.min(1, dt * 6);
-    G8.rc.x += (ru.x + 4 - G8.rc.x) * Math.min(1, dt * 4);
-    G8.rc.alt += (88 + Math.sin(G8.time * 6) * (ru.phase === 'run' ? 6 : 3) - G8.rc.alt) * Math.min(1, dt * 6);
+  updateTut(dt);
+  if (G8.screen === 'aim') {
+    updateAim(dt);
+    G8.camX += (HAND_X - 150 - G8.camX) * Math.min(1, dt * 6);
+    G8.rc.alt += (86 + Math.sin(G8.time * 3) * 3 - G8.rc.alt) * Math.min(1, dt * 6);
   }
   if (G8.screen === 'fly' && !G8.paused) {
     let sdt = dt;
     if (G8.slow > 0) { G8.slow -= dt; sdt = dt * 0.35; }
+    if (G8.tut) sdt *= 1.3;
     acc += Math.min(sdt, 0.1);
     G8.hintT += dt;
-    if (DEMO) demoInput();
-    const input = { tilt: tiltInput(), skip: edge.skip, fart: edge.fart, rc: edge.rc };
+    if (DEMO || G8.tut) demoInput();
+    const input = { tilt: G8.tut ? SIM.botInput(run).tilt : tiltInput(), skip: edge.skip, fart: edge.fart, rc: edge.rc };
     edge.skip = edge.fart = edge.rc = false;
     while (acc >= SIM.DT) {
-      SIM.step(run, input);
+      SIM.step(run, G8.tut ? SIM.botInput(run) : input);
       input.skip = input.fart = input.rc = false;
       acc -= SIM.DT;
     }
+    if (G8.tut) tutEvents(run);
     handleEvents(run);
     // breaking news as the rock passes each date
     const day = SIM.dayAt(run.x);
@@ -353,7 +437,7 @@ function update(dt) {
     }
     G8.bubbleCd -= dt;
     if (G8.bubbleCd <= 0 && run.phase === 'fly') say('rc', run.vx < 140 ? 'slow' : 'idle');
-    if (run.phase === 'done') finishRun();
+    if (run.phase === 'done' && !(G8.tut && G8.tut.end)) finishRun();
   }
   // camera
   if (run && (G8.screen === 'fly' || G8.screen === 'results')) {
@@ -458,66 +542,72 @@ function drawResistance(alt, label, broken) {
 
 function drawDock() {
   const x0 = sx(DOCK_START - 14), x1 = sx(DOCK_END + 8), y = sy(22);
-  // planks, posts, the foul line at the end
   px(ctx, '#6a4422', x0, y, x1 - x0, 5); px(ctx, '#8a5a30', x0, y, x1 - x0, 1);
   for (let x = DOCK_START - 6; x < DOCK_END; x += 18) px(ctx, '#5a3a1a', sx(x), y + 1, 1, 3);
   for (let x = DOCK_START; x <= DOCK_END; x += 46) px(ctx, '#4a2e16', sx(x), y + 5, 4, sy(0) - y + 8);
-  px(ctx, '#ffe066', sx(DOCK_END - 16), y - 1, 16, 2);
-  px(ctx, '#ffffff', sx(DOCK_END) - 1, y - 1, 2, 2);
-  // a little sign at the start
-  px(ctx, '#5a3a1a', sx(DOCK_START - 6), y - 22, 2, 22);
-  px(ctx, '#fdf6e0', sx(DOCK_START - 26), y - 34, 44, 13); px(ctx, '#22163a', sx(DOCK_START - 26), y - 21, 44, 1);
-  drawText(ctx, 'NO SWIM', sx(DOCK_START - 24), y - 31, '#e5487f');
-  const ru = G8.ru;
+  px(ctx, '#5a3a1a', sx(DOCK_START + 10), y - 22, 2, 22);
+  px(ctx, '#fdf6e0', sx(DOCK_START - 10), y - 34, 44, 13); px(ctx, '#22163a', sx(DOCK_START - 10), y - 21, 44, 1);
+  drawText(ctx, 'NO SWIM', sx(DOCK_START - 8), y - 31, '#e5487f');
   if (G8.screen === 'title') { drawFrameAt(ctx, 'wave', sx(DOCK_END - 20), y, 1); drawRC(sx(DOCK_END - 34), sy(88 + Math.sin(G8.time * 3) * 3), 'rcFront'); return; }
-  if (!ru) { drawFrameAt(ctx, 'wave', sx(DOCK_END - 20), y, 1); return; }
-  drawDroober(ru, y);
-  if (G8.screen === 'runup') drawRC(sx(G8.rc.x), sy(G8.rc.alt), 'rcFront');
+  drawDroober(y);
+  if (G8.screen === 'aim') drawRC(sx(G8.rc.x), sy(G8.rc.alt), 'rcFront');
 }
-function drawDroober(ru, dockY) {
-  const x = sx(ru.x);
-  if (ru.phase === 'fell') {
-    const t = ru.fellT;
-    if (t < 0.4) drawFrameAt(ctx, 'jump', x + t * 70, dockY + t * t * 300 - t * 60, 1);
-    else {
-      // bobbing in the lake
-      const hx = sx(DOCK_END + 26), hy = sy(0);
-      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, hy + 1); ctx.clip();
-      drawFrameAt(ctx, 'front', hx, hy + 30 + Math.sin(t * 8) * 2, 0);
-      ctx.restore();
-      drawText(ctx, 'BLUB', hx + 12, hy - 22 - (t * 10 % 6), '#d8f4ff');
-    }
-    return;
+function drawDroober(dockY) {
+  const a = G8.aim, x = sx(HAND_X - 10);
+  if (G8.screen !== 'aim') { drawFrameAt(ctx, 'wave', x, dockY, 1); return; }
+  const pulling = a.drag || a.charging;
+  drawFrameAt(ctx, pulling && a.power > 0.05 ? 'crouch' : 'front', x, dockY + (pulling ? 0 : Math.round(Math.sin(G8.time * 3))), pulling ? 1 : 0);
+}
+function drawAimUI() {
+  const a = G8.aim, hx = sx(HAND_X), hy = sy(HAND_ALT);
+  const rad = a.angle * Math.PI / 180, R0 = 44;
+  const wedge = (d0, d1, fill) => {
+    ctx.beginPath(); ctx.moveTo(hx, hy);
+    ctx.arc(hx, hy, R0, -d1 * Math.PI / 180, -d0 * Math.PI / 180); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+  };
+  wedge(-5, 60, 'rgba(255,255,255,0.12)');
+  wedge(SKIP_ZONE[0], SKIP_ZONE[1], 'rgba(123,224,138,0.45)');
+  const zr = (SKIP_ZONE[0] + SKIP_ZONE[1]) / 2 * Math.PI / 180;
+  drawTextOutlined(ctx, 'SKIP ZONE', hx + Math.cos(zr) * (R0 + 8) + 26, hy - Math.sin(zr) * (R0 + 8) - 4, '#7be08a', 1);
+  // trajectory preview: the throw, then the first skips if you time them
+  if (a.preview) for (let i = 0; i < a.preview.length; i += 2) {
+    const [x, alt, k] = a.preview[i];
+    if (k > 0) ctx.globalAlpha = k === 1 ? 0.7 : 0.45;
+    px(ctx, '#22163a', sx(x) - 1, sy(alt) - 1, 4, 4);
+    px(ctx, k === 0 ? '#ffffff' : '#ffe066', sx(x), sy(alt), 2, 2);
+    ctx.globalAlpha = 1;
   }
-  if (ru.phase === 'ready') {
-    drawFrameAt(ctx, 'front', x, dockY + Math.round(Math.sin(G8.time * 3)), 0);
-    drawRock(ctx, save.rock, x + 12, dockY - 18, 0);
-    return;
-  }
-  if (ru.phase === 'thrown') { drawFrameAt(ctx, ru.v > 20 ? 'run' : 'wave', x, dockY, 1); return; }
-  const bob = ru.phase === 'run' ? Math.round(Math.abs(Math.sin(ru.stepT * Math.PI)) * -3) : 0;
-  drawFrameAt(ctx, ru.phase === 'windup' ? 'jump' : 'run', x, dockY + bob, 1);
-  // the rock, held up and back as the arm rises
-  const a = ru.angle * Math.PI / 180;
-  const rx = ru.phase === 'windup' ? x - 4 - Math.cos(a) * 6 : x + 10, ry = ru.phase === 'windup' ? dockY - 30 - Math.sin(a) * 10 : dockY - 18 + bob;
+  // aim needle
+  for (let i = 6; i < R0 + 4; i += 2) px(ctx, '#ffe066', hx + Math.cos(rad) * i - 1, hy - Math.sin(rad) * i - 1, 3, 3);
+  // the rock pulled back on a band
+  const pull = 20 * a.power;
+  const rx = hx - Math.cos(rad) * pull, ry = hy + Math.sin(rad) * pull;
+  for (let i = 0; i <= 6; i++) px(ctx, '#3a2c63', hx + (rx - hx) * i / 6, hy + (ry - hy) * i / 6, 1, 1);
   drawRock(ctx, save.rock, rx, ry, 0);
-  if (ru.phase === 'windup') drawAimGuide(ru);
+  // power + angle readout
+  const bx = W / 2 - 80, by = 40;
+  px(ctx, '#22163a', bx - 2, by - 2, 164, 14);
+  for (let i = 0; i < 10; i++) {
+    const on = a.power * 10 > i + 0.01;
+    px(ctx, on ? ['#7fe3ff', '#7fe3ff', '#7be08a', '#7be08a', '#7be08a', '#b8f070', '#ffe066', '#ffe066', '#ff9f3a', '#ff6b6b'][i] : '#3a2c63', bx + i * 16, by, 14, 10);
+  }
+  drawTextOutlined(ctx, 'POWER ' + Math.round(a.power * 100) + '%', bx + 30, by + 14, '#fff', 1);
+  const inZone = a.angle >= SKIP_ZONE[0] && a.angle <= SKIP_ZONE[1];
+  const angTxt = Math.round(a.angle) + ' DEG ' + (inZone ? 'SKIP ZONE' : a.angle > SKIP_ZONE[1] ? 'HIGH' : 'LOW');
+  drawTextOutlined(ctx, angTxt, bx + 160 - textWidth(angTxt) / 2, by + 14, inZone ? '#7be08a' : '#ff9f6b', 1);
+}
+// a little pointing hand that shows the pull-back gesture
+function drawGhostHand(px0, py0, px1, py1, t) {
+  const k = Math.min(1, t), x = px0 + (px1 - px0) * k, y = py0 + (py1 - py0) * k;
+  const HAND = ['..o.....', '.oyo....', '.oyo....', '.oyooo..', 'ooyyyyo.', 'oyyyyyyo', 'oyyyyyyo', '.oyyyyo.', '..oooo..'];
+  blit(ctx, bmp('hand', HAND, { o: '#22163a', y: '#fff4e0' }), x - 2, y - 1);
+  if (t > 0.05) { ctx.globalAlpha = 0.5; for (let i = 0; i < 8; i++) px(ctx, '#ffffff', px0 + (x - px0) * i / 8, py0 + (y - py0) * i / 8, 1, 1); ctx.globalAlpha = 1; }
 }
 function drawRC(x, y, frame = 'rcSide') {
   const r = SPRITE_RECTS[frame];
   if (SPRITES && SPRITES.complete && r) ctx.drawImage(SPRITES, r[0], r[1], r[2], r[3], Math.round(x - r[2] / 2), Math.round(y - r[3] / 2), r[2], r[3]);
 }
-function drawAimGuide(ru) {
-  const s = SIM.stats(save.up), p = Math.max(0.2, ruPower(ru)), rad = ru.angle * Math.PI / 180;
-  let x = ru.x + 8, alt = 40, vx = Math.cos(rad) * s.throwMax * p, vy = Math.sin(rad) * s.throwMax * p;
-  for (let i = 0; i < 40; i++) {
-    for (let k = 0; k < 4; k++) { x += vx / 120; alt += vy / 120; vy -= SIM.G / 120; }
-    if (alt < 0) break;
-    if (i % 2 === 0) px(ctx, i < 6 ? '#ffe066' : '#ffffff', sx(x), sy(alt), 2, 2);
-  }
-  drawTextOutlined(ctx, Math.round(ru.angle) + ' DEG', sx(ru.x), sy(98), ru.angle > 35 ? '#ff9f6b' : '#ffffff', 1);
-}
-
 function drawRockAndRC(run) {
   const x = sx(run.x), y = sy(run.alt) - 4;
   if (run.phase === 'fly') {
@@ -583,7 +673,7 @@ function drawHUD() {
       for (let i = 0; i < run.rc; i++) px(ctx, '#7fe3ff', 34 + i * 7, by - 9, 5, 5);
     }
     if (run.streak >= 2) drawTextOutlined(ctx, run.streak + 'X STREAK', W / 2, 44, run.streak >= 5 ? '#ff9f3a' : '#ffe066', 1);
-    if (save.runs < 3 && G8.hintT < 12) {
+    if (save.runs < 3 && G8.hintT < 12 && !G8.tut) {
       const tip = G8.hintT < 4 ? (G8.touch ? 'TAP AS THE ROCK HITS THE WATER' : 'TAP SPACE AS THE ROCK HITS THE WATER')
         : G8.hintT < 8 ? (G8.touch ? 'HOLD UP OR DOWN TO TILT' : 'UP AND DOWN TILT THE ROCK')
         : (G8.touch ? 'FART AND RC BUTTONS FOR BOOSTS' : 'X TO FART. C TO CALL RC');
@@ -688,36 +778,30 @@ function drawTitle() {
   if (save.best.days) drawTextOutlined(ctx, 'BEST DAY ' + save.best.days + '   PEAK ' + fmtPrice(save.best.peak) + '   RANK ' + META.RANKS[META.rankOf(save.missions.length)], W / 2, 174, '#ffe066', 1);
   drawText(ctx, 'M MUTE  N MUSIC', 6, H - 10, '#b8a8e8');
   drawText(ctx, 'BY DROOBER', W - 66, H - 10, '#b8a8e8');
+  // how to play
+  const [ix, iy, iw, ih] = INFO_BTN, pulse = (G8.time * 2 | 0) % 2 === 0;
+  px(ctx, '#22163a', ix - 1, iy - 1, iw + 2, ih + 2); px(ctx, pulse ? '#e5487f' : '#c03a6a', ix, iy, iw, ih);
+  drawText(ctx, 'I', ix + 6, iy + 4, '#fff', 2); drawText(ctx, 'HOW TO PLAY', ix + 20, iy + 8, '#fff');
 }
+const INFO_BTN = [W - 96, 6, 90, 22];
 
-function drawRunup() {
+function drawAim() {
   drawWorld();
-  const ru = G8.ru;
+  drawAimUI();
+  if (G8.tut) return;
+  const a = G8.aim;
   px(ctx, 'rgba(20,12,40,0.55)', 0, 0, W, 30);
   drawText(ctx, 'ROCK #' + save.rock, 6, 3, '#fff');
   drawText(ctx, 'GWEI ' + save.gwei, 6, 11, '#d6c2ff');
-  if (ru.phase === 'ready') { px(ctx, '#3a2c63', ...SHOP_BTN); drawTextC(ctx, 'SHOP', SHOP_BTN[0] + 25, 7, '#fff'); }
-  const ms = META.active(save);
+  px(ctx, '#3a2c63', ...SHOP_BTN); drawTextC(ctx, 'SHOP', SHOP_BTN[0] + 25, 7, '#fff');
   drawText(ctx, 'MISSIONS', 92, 3, '#ffe066');
-  ms.forEach((m, i) => drawText(ctx, m.text, 148, 3 + i * 8, '#fff'));
-  // speed meter above Droober
-  if (ru.phase === 'run' || ru.phase === 'windup') {
-    const p = Math.min(1, ru.v / RUN_VMAX), bx = sx(ru.x) - 30, by = sy(78);
-    px(ctx, '#22163a', bx - 1, by - 1, 62, 8); px(ctx, '#3a2c63', bx, by, 60, 6);
-    px(ctx, p > 0.85 ? '#ffe066' : p > 0.55 ? '#7be08a' : '#7fe3ff', bx, by, Math.round(60 * p), 6);
-    const tier = p > 0.9 ? 'SEND IT' : p > 0.7 ? 'SPRINT' : p > 0.4 ? 'RUN' : 'JOG';
-    drawTextOutlined(ctx, tier, sx(ru.x), by - 11, '#fff', 1);
+  META.active(save).forEach((m, i) => drawText(ctx, m.text, 148, 3 + i * 8, '#fff'));
+  if (a.warnT > 0) drawTextOutlined(ctx, 'PULL BACK FURTHER', W / 2, 68, '#ff9f6b', 2);
+  else if (!a.drag && !a.charging) {
+    drawTextOutlined(ctx, G8.touch ? 'DRAG BACK ANYWHERE. LET GO TO THROW' : 'DRAG BACK WITH THE MOUSE, OR UP DOWN + HOLD SPACE', W / 2, 68, '#fff', 1);
+    if (save.runs < 3) drawGhostHand(320, 120, 268, 135, (G8.time % 2.2) / 1.4);
   }
-  let tip = '';
-  if (ru.phase === 'ready') tip = G8.touch ? 'TAP TAP TAP TO RUN. HOLD TO AIM. LET GO TO THROW' : 'MASH SPACE TO RUN. HOLD TO AIM. LET GO TO THROW';
-  else if (ru.phase === 'run' && ru.taps < 6) tip = 'FASTER!';
-  else if (ru.phase === 'run' && DOCK_END - ru.x < 90) tip = 'HOLD TO AIM!';
-  else if (ru.phase === 'windup') tip = 'LET GO TO THROW. NEAR THE EDGE IS BEST';
-  if (tip) drawTextOutlined(ctx, tip, W / 2, 46, '#fff', 1);
-  if (ru.phase === 'ready') drawTextOutlined(ctx, 'FLAT THROWS SKIP. STEEP ONES SPLASH.', W / 2, 58, '#d6c2ff', 1);
-  if (ru.phase === 'fell') drawTextOutlined(ctx, 'THE DOCK ENDS. TRY AGAIN', W / 2, 62, '#ffe066', 2);
 }
-
 const RES_PANEL = [24, 24, 432, 222];
 const RES_AGAIN = [RES_PANEL[0] + 16, RES_PANEL[1] + RES_PANEL[3] - 26, 130, 18];
 function drawResults() {
@@ -775,18 +859,18 @@ function shopKey(code) {
   const n = SIM.UPGRADES.length;
   if (code === 'KeyQ' || code === 'Tab' || (code === 'ArrowLeft' && G8.shopTab !== 1)) { G8.shopTab = (G8.shopTab + 2) % 3; Audio8.sfx('menu'); return; }
   if (code === 'KeyE' || (code === 'ArrowRight' && G8.shopTab !== 1)) { G8.shopTab = (G8.shopTab + 1) % 3; Audio8.sfx('menu'); return; }
-  if (code === 'KeyT') return toRunup();
+  if (code === 'KeyT') return toAim();
   if (G8.shopTab === 0) {
     if (code === 'ArrowUp' || code === 'KeyW') { G8.shopSel = (G8.shopSel + n) % (n + 1); Audio8.sfx('menu'); }
     if (code === 'ArrowDown' || code === 'KeyS') { G8.shopSel = (G8.shopSel + 1) % (n + 1); Audio8.sfx('menu'); }
-    if (code === 'Enter' || code === 'KeyB' || code === 'Space') { if (G8.shopSel === n) toRunup(); else buy(G8.shopSel); }
+    if (code === 'Enter' || code === 'KeyB' || code === 'Space') { if (G8.shopSel === n) toAim(); else buy(G8.shopSel); }
   } else if (G8.shopTab === 1) {
     const L = save.rocks.length;
     if (code === 'ArrowLeft') pickRock((G8.rockSel + L - 1) % L);
     if (code === 'ArrowRight') pickRock((G8.rockSel + 1) % L);
     if (code === 'KeyB' || code === 'Enter') buyRockNow();
-    if (code === 'Space') toRunup();
-  } else if (ACTION_KEYS.includes(code)) toRunup();
+    if (code === 'Space') toAim();
+  } else if (ACTION_KEYS.includes(code)) toAim();
 }
 const THROW_BTN = [SHOP.x + 8, SHOP.y + SHOP.h - 26, SHOP.w - 16, 18];
 const rockCell = i => [SHOP.x + 150 + (i % 11) * 20, SHOP.y + 54 + Math.floor(i / 11) * 15];
@@ -794,7 +878,7 @@ const ROCK_BUY_BTN = [SHOP.x + 12, SHOP.y + 150, 124, 18];
 function shopClick(p) {
   const { x, y, w, rowH } = SHOP;
   for (let i = 0; i < 3; i++) if (hitRect(p, [x + 8 + i * 90, y + 6, 86, 14])) { G8.shopTab = i; Audio8.sfx('menu'); return; }
-  if (hitRect(p, THROW_BTN)) return toRunup();
+  if (hitRect(p, THROW_BTN)) return toAim();
   if (G8.shopTab === 0) {
     SIM.UPGRADES.forEach((u, i) => { if (hitRect(p, [x + 4, y + 30 + i * rowH - 3, w - 8, rowH - 2])) { G8.shopSel = i; buy(i); } });
   } else if (G8.shopTab === 1) {
@@ -877,8 +961,8 @@ function draw() {
   if (G8.shake > 0) ctx.translate((Math.random() - 0.5) * G8.shake, (Math.random() - 0.5) * G8.shake);
   switch (G8.screen) {
     case 'title': drawTitle(); break;
-    case 'runup': drawRunup(); break;
-    case 'fly': drawWorld(); drawHUD(); drawTouchButtons(); if (G8.paused) drawPause(); break;
+    case 'aim': drawAim(); drawTut(); break;
+    case 'fly': drawWorld(); drawHUD(); if (!G8.tut) drawTouchButtons(); drawTut(); if (G8.paused) drawPause(); break;
     case 'results': drawResults(); break;
     case 'shop': drawShop(); break;
   }
@@ -886,17 +970,18 @@ function draw() {
 }
 
 // ---------- demo ----------
-// ?demo=<day>[&alt=<alt>]: a bot throws and plays from that day. &screen=shop|rocks|missions|runup|results, &touch
-const DEMO = (() => { try { const q = new URLSearchParams(location.search); return q.has('demo') ? { day: +q.get('demo') || 0, alt: +q.get('alt') || 0, screen: q.get('screen'), touch: q.has('touch') } : null; } catch { return null; } })();
+// ?demo=<day>[&alt=<alt>]: a bot throws and plays from that day. &screen=shop|rocks|missions|aim|tut|results, &touch
+const DEMO = (() => { try { const q = new URLSearchParams(location.search); return q.has('demo') ? { day: +q.get('demo') || 0, alt: +q.get('alt') || 0, screen: q.get('screen'), touch: q.has('touch'), ff: +q.get('ff') || 0 } : null; } catch { return null; } })();
 function demoStart() {
   if (DEMO.touch) G8.touch = true;
   if (['shop', 'rocks', 'missions'].includes(DEMO.screen)) {
     save.gwei = 1234; save.up = { arm: 3, rock: 2, hands: 1, farts: 4 }; save.rocks = [7, 42, 3, 88, 15, 61]; save.rock = 42; save.missions = [0, 1, 2, 3, 5];
     toShop(); G8.shopTab = ['shop', 'rocks', 'missions'].indexOf(DEMO.screen); return;
   }
-  toRunup();
-  if (DEMO.screen === 'runup') { const ru = G8.ru; ru.phase = 'windup'; ru.x = -40; ru.v = 190; ru.down = true; ru.downT = -0.5; G8.camX = ru.x - 170; return; }
-  G8.ru.angle = 14; G8.ru.v = RUN_VMAX; G8.ru.x = 20; ruThrow();
+  if (DEMO.screen === 'tut') { startTut(); return; }
+  toAim();
+  if (DEMO.screen === 'aim') { const a = G8.aim; a.drag = { x0: 300, y0: 120, x: 252, y: 134 }; aimFromDrag(a); updateAim(0); return; }
+  G8.aim.angle = 14; G8.aim.power = 1; doThrow();
   const run = G8.run;
   run.x = DEMO.day * SIM.PX_PER_DAY; run.vx = 520; run.alt = DEMO.alt || 60; run.vy = 120;
   G8.camX = run.x - 150; G8.camAlt = Math.max(0, run.alt - 105); G8.rc = { x: run.x - 20, alt: run.alt + 16 };
@@ -925,5 +1010,5 @@ function frame(now) {
   update(dt); draw();
   requestAnimationFrame(frame);
 }
-if (DEMO) demoStart();
+if (DEMO) { demoStart(); for (let i = 0; i < DEMO.ff * 60; i++) update(1 / 60); } // &ff=<seconds> fast-forwards (headless screenshots barely tick)
 requestAnimationFrame(frame);

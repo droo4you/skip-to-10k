@@ -46,7 +46,7 @@ const META = (() => {
     ['SKIP 10 TIMES IN ONE RUN', 20, (r) => r.skips >= 10],
     ['REACH THE DAO', 25, (r) => r.days >= 300],
     ['GET A 3X PERFECT STREAK', 25, (r) => r.bestStreak >= 3],
-    ['THROW ON THE LINE', 30, (r, c) => n(c, 'line') >= 1],
+    ['MAX POWER THROW IN THE SKIP ZONE', 30, (r, c) => n(c, 'line') >= 1],
     ['COLLECT 15 GEMS IN ONE RUN', 30, (r) => r.gems >= 15],
     ['REACH DAY 300 WITHOUT FARTING', 35, (r, c) => r.days >= 300 && n(c, 't:PFFT') === 0],
     ['GET REJECTED AT THE ATH', 40, (r, c) => n(c, 'rejected') >= 1],
