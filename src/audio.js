@@ -76,6 +76,14 @@ const Audio8 = {
       case 'charge': T('triangle', 200 + arg * 600, 200 + arg * 600, 0.03, 0.05); break;
       case 'menu': T('triangle', 600, 600, 0.04, 0.12); break;
       case 'buy': [660, 990, 1320].forEach((f, i) => T('square', f, f, 0.06, 0.12, i * 0.05)); break;
+      case 'step': this.noise(0.03, 0.08, 0, 0, 900 + Math.random() * 300); T('square', 140 + arg * 300, 120 + arg * 300, 0.03, 0.06); break;
+      case 'windup': T('triangle', 300 + arg * 8, 300 + arg * 8, 0.03, 0.05); break;
+      case 'line': [988, 1319].forEach((f, i) => T('square', f, f, 0.07, 0.12, i * 0.06)); break;
+      case 'fall': T('square', 700, 150, 0.45, 0.14); this.noise(0.5, 0.2, 0, 0.4, 900); break;
+      case 'news': [1200, 0, 1200, 1200].forEach((f, i) => f && T('square', f, f, 0.03, 0.06, i * 0.05)); break;
+      case 'mission': [784, 988, 1175, 1568].forEach((f, i) => T('square', f, f, 0.1, 0.12, i * 0.08)); break;
+      case 'airdrop': T('triangle', 900, 1400, 0.15, 0.14); T('triangle', 1200, 1800, 0.12, 0.1, 0.1); break;
+      case 'scam': T('sawtooth', 300, 150, 0.3, 0.1); break;
       case 'nope': T('square', 150, 150, 0.06, 0.1); T('square', 120, 120, 0.08, 0.1, 0.07); break;
     }
   },

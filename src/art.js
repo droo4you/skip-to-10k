@@ -481,6 +481,18 @@ function drawEnt(ctx, run, e, sx, by, time) {
       ctx.globalAlpha = 1;
       break;
     }
+    case 'airdrop': {
+      const a = SIM.airAlt(run, e); // by is the spawn alt's screen y; shift it by the fall
+      const top = by + (e.alt - a) - 12, sway = Math.round(Math.sin(time * 2 + e.phase) * 2);
+      if (a > 3) {
+        px(ctx, '#ff7ab0', sx - 4 + sway, top - 16, 20, 4); px(ctx, '#fff', sx + sway, top - 16, 4, 4); px(ctx, '#fff', sx + 8 + sway, top - 16, 4, 4);
+        px(ctx, '#ff7ab0', sx - 2 + sway, top - 18, 16, 2);
+        px(ctx, '#e8e0f0', sx - 3 + sway, top - 12, 1, 12); px(ctx, '#e8e0f0', sx + 14 + sway, top - 12, 1, 12);
+      }
+      px(ctx, '#8a5a30', sx, top, 12, 12); px(ctx, '#c08a50', sx + 1, top + 1, 10, 10); px(ctx, '#8a5a30', sx + 1, top + 5, 10, 2);
+      lab(ctx, '?', sx + 3, top - 28 + (a > 3 ? 0 : 18), '#ffe066');
+      break;
+    }
     case 'farm': {
       px(ctx, '#6a4422', sx, by - 2, 64, 4); px(ctx, '#8a5a30', sx, by - 2, 64, 1);
       for (let i = 0; i < 7; i++) { px(ctx, '#4fbf4a', sx + 4 + i * 9, by - 8, 2, 6); px(ctx, '#ff8a2a', sx + 3 + i * 9, by - 3, 4, 2); }

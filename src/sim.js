@@ -6,7 +6,7 @@ const SIM = (() => {
   const PX_PER_DAY = 6;
   const SINK = 75;           // slower than this at a water contact and the rock goes down
   const DOCK_ALT = 34, DOCK_X = 52;
-  const ALT_5K = 600, ALT_10K = 1395;
+  const ALT_5K = 613, ALT_10K = 1395; // $4,953 (the Aug 2025 ATH) and $10,000
   const GENESIS = Date.UTC(2015, 6, 30);
   const TODAY_DAY = 4088;    // 2026-10-08
   const CHUNK = 360;
@@ -43,6 +43,8 @@ const SIM = (() => {
   ];
   const ALL_POOL = { gem: 5, banana: 2, frog: 1, fart: 1.5, crab: 2, pump: 1, whaleG: 1, whaleR: 1.2, fork: 0.6,
     kitty: 0.8, bear: 1, farm: 1, bull: 1, yacht: 1, kevin: 0.5, bat: 1, suit: 1, skrump: 1 };
+  for (const e of ERAS) if (e.pool) e.pool.airdrop = 0.45;
+  ALL_POOL.airdrop = 0.6;
   function eraIndexAt(x) {
     const d = dayAt(x);
     let i = 0;
@@ -69,7 +71,7 @@ const SIM = (() => {
   function stats(up) {
     const L = id => Math.min(MAX_LVL, (up && up[id]) || 0);
     return {
-      throwMax: 330 + 75 * L('arm'),
+      throwMax: 390 + 70 * L('arm'),
       goodKeep: 0.84 + 0.025 * L('rock'),
       perfectKeep: 0.95 + 0.009 * L('rock'),
       window: 0.075 + 0.022 * L('hands'),
@@ -107,7 +109,7 @@ const SIM = (() => {
   const SIZES = {
     gem: [6, 8], banana: [9, 8], fart: [22, 16], pump: [14, 46], whaleG: [58, 14], whaleR: [62, 14],
     crab: [150, 6], suit: [16, 30], kevin: [24, 20], yacht: [72, 22], skrump: [12, 12], frog: [28, 4],
-    kitty: [16, 14], bear: [44, 22], bull: [26, 18], fork: [22, 92], bat: [16, 10], farm: [64, 6],
+    kitty: [16, 14], airdrop: [12, 12], bear: [44, 22], bull: [26, 18], fork: [22, 92], bat: [16, 10], farm: [64, 6],
   };
   function spawn(t, x, alt, r) {
     const [w, h] = SIZES[t];
@@ -138,7 +140,10 @@ const SIM = (() => {
       else if (t === 'fart') alt = 6 + r() * 50;
       else if (t === 'bat') alt = 260 + r() * 460;
       else if (t === 'whaleG' || t === 'whaleR') alt = -6;
-      run.ents.push(spawn(t, x, alt, r));
+      else if (t === 'airdrop') alt = 280 + r() * 220;
+      const ent = spawn(t, x, alt, r);
+      if (t === 'airdrop') ent.t0 = run.t;
+      run.ents.push(ent);
     }
     if (era.id === 'ico' && r() < 0.5) {
       // ICO mania: free money falling from the sky
@@ -158,14 +163,20 @@ const SIM = (() => {
       peakAlt: DOCK_ALT, broke5k: false, broke10k: false, sumPrice: 0, nPrice: 0,
       pressT: -9, pendingPerfect: 0, sinkT: 0, iceSlide: false, lastSkipKind: '',
       ents: [], chunks: 0, events: [], candles: [], seenEra: 0, passedToday: false,
-      endReason: '',
+      endReason: '', counts: {},
     };
     return run;
   }
-  function emit(run, type, text, color) { run.events.push({ type, text, color, x: run.x, alt: run.alt }); }
+  function emit(run, type, text, color) {
+    run.counts[type] = (run.counts[type] || 0) + 1;
+    if (text) run.counts['t:' + text] = (run.counts['t:' + text] || 0) + 1;
+    run.events.push({ type, text, color, x: run.x, alt: run.alt });
+  }
 
-  function throwRock(run, angleDeg, power) {
-    const a = angleDeg * Math.PI / 180, sp = run.s.throwMax * Math.max(0.25, Math.min(1, power));
+  // power is 0..1 from the run-up; a release on the line can push it past 1
+  function throwRock(run, angleDeg, power, x = DOCK_X) {
+    const a = angleDeg * Math.PI / 180, sp = run.s.throwMax * Math.max(0.2, Math.min(1.2, power));
+    run.x = x;
     run.vx = Math.cos(a) * sp; run.vy = Math.sin(a) * sp;
     run.phase = 'fly';
     emit(run, 'throw');
@@ -249,9 +260,20 @@ const SIM = (() => {
       case 'fork':
         if (run.alt < e.alt + 62) { e.used = true; run.vx = vx * 0.75; run.streak = 0; emit(run, 'bonk', 'FORKED', '#ff9f6b'); break; }
         e.used = true; run.vy = 500; emit(run, 'fork', 'HARD FORK', '#c89bff'); break;
+      case 'airdrop': {
+        e.used = true;
+        const roll = Math.floor(e.phase / 6.28 * 4);
+        if (roll === 0) { run.gems += 10; emit(run, 'airdrop', 'AIRDROP +10', '#ffe066'); }
+        else if (roll === 1) { run.farts++; emit(run, 'airdrop', 'AIRDROP +1 FART', '#9ff07a'); }
+        else if (roll === 2) { run.rc++; emit(run, 'airdrop', 'AIRDROP +1 RC', '#7fe3ff'); }
+        else emit(run, 'scam', 'IT WAS A SCAM', '#ff6b6b');
+        break;
+      }
       case 'bat': e.used = true; run.vx = vx + 230; emit(run, 'bat', 'ULTRASOUND', '#c89bff'); break;
     }
   }
+  // airdrops drift down on a parachute and bob on the water once they land
+  function airAlt(run, e) { return Math.max(2, e.alt - (run.t - e.t0) * 22); }
   function whaleTailUp(run, e) { return ((run.t + e.phase) % 2.2) < 0.9; }
   // Hit boxes, tuned per type so the art and the collision agree.
   function hitBox(run, e) {
@@ -260,6 +282,7 @@ const SIM = (() => {
       case 'whaleR': return [e.x + 34, e.alt, 36, 86];           // the tail slap
       case 'bear': return [e.x + 6, 0, 30, 54];                  // the swipe
       case 'skrump': return [e.x, Math.abs(Math.sin(run.t * 3 + e.phase)) * 54, e.w, e.h];
+      case 'airdrop': return [e.x - 3, airAlt(run, e) - 3, e.w + 6, e.h + 6];
       case 'bat': return [e.x - 4, e.alt + Math.sin(run.t * 4 + e.phase) * 10 - 4, e.w + 8, e.h + 8];
       case 'gem': { const m = run.s.magnet; return [e.x - m, e.alt - m, e.w + 2 * m, e.h + 2 * m]; }
       case 'yacht': return [e.x, 0, e.w, e.h];
@@ -400,7 +423,7 @@ const SIM = (() => {
   return {
     DT, G, PX_PER_DAY, DOCK_ALT, DOCK_X, ALT_5K, ALT_10K, TODAY_DAY, ERAS, ICE, UPGRADES, MAX_LVL,
     priceAt, dayAt, dateAt, eraIndexAt, onIce, stats, upgradeCost, newRun, throwRock, step, results,
-    hitBox, whaleTailUp, botInput, speed,
+    hitBox, whaleTailUp, airAlt, botInput, speed,
   };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;
