@@ -20,7 +20,7 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
   the real sim. Keyboard: UP/DOWN aim + hold SPACE (fills in 1.1s, holds at max). Throw power maps to 0.45..1 and
   `throwRock` floors at 0.45, so every throw skips.
 - HOW TO PLAY (title "I" button or I key): a narrated bot run on TUT_SEED 30 with TUT_UP upgrades, bot input every
-  sim step so it is deterministic. Cut at 70s. Never touches the save. Re-pick the seed offline if the sim changes.
+  sim step so it is deterministic. TUT_UP is about two upgrades each so the demo matches what players soon have. Cut at 70s. Never touches the save. Re-pick the seed offline if the sim changes.
 
 ## Files
 - `src/sim.js` pure physics, entities, upgrades, eras. No DOM. Loaded by tests through vm/require.
@@ -29,10 +29,16 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
 - `src/main.js` screens (title, runup, fly, results, shop with UPGRADES/ROCKS/MISSIONS tabs), input, camera, HUD, save (`localStorage` skip10k.v1).
 - `src/audio.js` synthesized sfx + one loop. `src/font.js`, `src/sprites.js`, `assets/sprites.png` come from droober-two-places.
 
+## Boosts
+- The user never found C for RC. Desktop now shows big clickable X FART / C RC LIFT buttons that flash, plus a
+  prompt over the rock, whenever the rock is slow and low. Results list boosts left unused. Start: 3 farts, 2 RC.
+
 ## Working rules
 - After any sim change: `node tests/sim.mjs` (perfect-tap bot balance table) and `node tests/harness.mjs`
   (stubbed DOM, plays every screen). After copy or meta changes: `node tests/meta.mjs` (every string renders in the
-  bitmap font, news in date order, missions complete). A human-ish first run should land around day 300-500.
+  bitmap font, news in date order, missions complete). Balance targets (user, v0.4: "too slow and tedious" otherwise): a fresh save is already fun, close to the demo.
+  `node tests/progress.mjs` plays a sloppy human from zero: first run ~day 1000, ATH by run 2-4, today by ~6,
+  10K ~13, maxed ~15. FOREVER gets rougher past today (entropy + heavier hazards) so runs still end.
 - Screenshots without the Chrome extension: headless Chrome with `?demo=<day>[&alt=<alt>]` or `&screen=shop|rocks|missions|runup|results`, `&touch`,
   `--virtual-time-budget=800`. Headless Chrome barely ticks rAF, so add `&ff=<seconds>` to fast-forward
   (e.g. `?demo=0&screen=tut&ff=30`). Demo mode is a bot that throws and plays from that day.

@@ -89,6 +89,7 @@ function btnAt(p) {
 }
 const hitRect = (p, [x, y, w, h]) => p.x >= x && p.x < x + w && p.y >= y && p.y < y + h;
 const SHOP_BTN = [W - 56, 4, 50, 13];
+const BOOST_BTNS = { fart: [6, H - 30, 76, 24], rc: [88, H - 30, 76, 24] };
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); Audio8.init();
   if (e.pointerType === 'touch') G8.touch = true;
@@ -111,7 +112,8 @@ cv.addEventListener('pointerdown', e => {
   if (s === 'fly') {
     if (G8.paused) { G8.paused = false; return; }
     if (hitRect(p, [W - 22, 4, 18, 14])) { G8.paused = true; return; }
-    const b = G8.touch ? btnAt(p) : null;
+    let b = G8.touch ? btnAt(p) : null;
+    if (!G8.touch) for (const k in BOOST_BTNS) if (hitRect(p, BOOST_BTNS[k])) b = k;
     pointers.set(e.pointerId, { ...p, btn: b });
     if (!b || b === 'skip') edge.skip = true;
     if (b === 'fart') edge.fart = true;
@@ -210,9 +212,10 @@ function updateAim(dt) {
 
 // ---------- how to play: a narrated demo run ----------
 // The bot plays a well-upgraded run while captions explain what is happening. Nothing is saved.
-const TUT_UP = { arm: 3, rock: 3, hands: 3, aero: 3, farts: 3, rc: 3, volume: 4 };
-// Seed 30 was picked offline: in ~90s it gets rejected at the ATH, breaks it, farts, calls RC and reaches today.
-const TUT_SEED = 30;
+const TUT_UP = { arm: 2, rock: 2, hands: 2, aero: 2, farts: 1, rc: 2, volume: 2 };
+// Seed 55 was picked offline (with TUT_UP, about two upgrades each): in ~90s it gets rejected at the ATH, breaks it,
+// farts, calls RC, bounces off Kevin and reaches today.
+const TUT_SEED = 55;
 function startTut() {
   toAim();
   G8.tut = { t: 0, caps: [], cap: null, seen: new Set(), end: 0 };
@@ -325,6 +328,7 @@ function finishRun() {
   persist();
   r.quip = quipFor(r);
   r.candles = run.candles.slice();
+  r.leftFarts = run.farts; r.leftRc = run.rc;
   r.at = G8.time;
   G8.res = r; G8.screen = 'results';
   if (r.done.length) setTimeout(() => Audio8.sfx('mission'), 500);
@@ -666,11 +670,14 @@ function drawHUD() {
   if (G8.screen === 'fly') {
     drawText(ctx, 'II', W - 16, 7, '#fff');
     const by = H - 12;
-    if (!G8.touch) {
-      drawText(ctx, 'X FART', 6, by, run.farts ? '#9ff07a' : '#666');
-      for (let i = 0; i < run.farts; i++) blit(ctx, BANANA(), 44 + i * 10, by - 1);
-      drawText(ctx, 'C RC', 6, by - 10, run.rc ? '#7fe3ff' : '#666');
-      for (let i = 0; i < run.rc; i++) px(ctx, '#7fe3ff', 34 + i * 7, by - 9, 5, 5);
+    if (!G8.touch && !G8.tut) {
+      const want = boostWanted(run);
+      drawBoostBtn(BOOST_BTNS.fart, 'X', 'FART', run.farts, '#3fa86a', want);
+      drawBoostBtn(BOOST_BTNS.rc, 'C', 'RC LIFT', run.rc, '#1cb6d8', want);
+    }
+    if (boostWanted(run) && (run.farts || run.rc) && !G8.tut && (G8.time * 3 | 0) % 2 === 0) {
+      const t = G8.touch ? (run.rc ? 'TAP RC!' : 'TAP FART!') : (run.rc ? 'PRESS C: RC LIFT!' : 'PRESS X: FART!');
+      drawTextOutlined(ctx, t, sx(run.x), Math.max(40, sy(run.alt) - 34), '#7fe3ff', 1);
     }
     if (run.streak >= 2) drawTextOutlined(ctx, run.streak + 'X STREAK', W / 2, 44, run.streak >= 5 ? '#ff9f3a' : '#ffe066', 1);
     if (save.runs < 3 && G8.hintT < 12 && !G8.tut) {
@@ -688,6 +695,16 @@ function drawHUD() {
     drawTextOutlined(ctx, b.title, W / 2, y, '#ffe066', 3);
     drawTextOutlined(ctx, b.sub, W / 2, y + 26, '#ffffff', 1);
   }
+}
+// boosts are worth it when the rock is slowing down near the water
+function boostWanted(run) { return run.phase === 'fly' && run.vx < 240 && run.alt < 70 && (run.farts > 0 || run.rc > 0) && run.rcT <= 0; }
+function drawBoostBtn([x, y, w, h], keyLbl, name, n, col, glow) {
+  const lit = n > 0 && glow && (G8.time * 4 | 0) % 2 === 0;
+  px(ctx, '#22163a', x - 1, y - 1, w + 2, h + 2);
+  px(ctx, n ? (lit ? '#ffe066' : col) : '#4a4060', x, y, w, h);
+  px(ctx, '#22163a', x + 3, y + 3, 14, 14); drawText(ctx, keyLbl, x + 7, y + 6, '#fff');
+  drawText(ctx, name, x + 21, y + 4, lit ? '#22163a' : '#fff');
+  for (let i = 0; i < n; i++) px(ctx, lit ? '#22163a' : '#ffffff', x + 21 + i * 7, y + 14, 5, 5);
 }
 function drawNews() {
   const n = G8.news;
@@ -829,6 +846,7 @@ function drawResults() {
     drawText(ctx, 'MISSIONS', x + 12, my, '#7a4a8a'); my += 10;
     META.active(save).forEach(m => { drawText(ctx, '- ' + m.text, x + 12, my, '#8a7aa8'); my += 9; });
   }
+  if (r.leftFarts + r.leftRc > 0) drawText(ctx, 'UNUSED: ' + r.leftFarts + ' FARTS, ' + r.leftRc + ' RC LIFTS. USE THEM WHEN YOU SLOW DOWN', x + 12, y + h - 60, '#e0a020');
   drawTextC(ctx, '"' + r.quip + '"', x + w / 2 - 20, y + h - 46, '#e5487f');
   drawFrameAt(ctx, 'wave', x + w - 30, y + h - 4, 0);
   drawRC(x + w - 58, y + h - 30 + Math.sin(G8.time * 4) * 2, 'rcFront');

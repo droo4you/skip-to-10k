@@ -45,6 +45,12 @@ const SIM = (() => {
     kitty: 0.8, bear: 1, farm: 1, bull: 1, yacht: 1, kevin: 0.5, bat: 1, suit: 1, skrump: 1 };
   for (const e of ERAS) if (e.pool) e.pool.airdrop = 0.45;
   ALL_POOL.airdrop = 0.6;
+  // forever gets meaner: hazards weigh more every 2000 days
+  function foreverPool(day) {
+    const k = 1 + Math.max(0, day - TODAY_DAY) / 2000, p = { ...ALL_POOL };
+    for (const h of ['whaleR', 'bear', 'kitty', 'crab', 'fork']) p[h] *= k;
+    return p;
+  }
   function eraIndexAt(x) {
     const d = dayAt(x);
     let i = 0;
@@ -66,22 +72,23 @@ const SIM = (() => {
     { id: 'volume', name: 'VOLUME', desc: 'NEEDED TO BREAK RESISTANCE', base: 50 },
   ];
   const MAX_LVL = 5;
-  const upgradeCost = (u, lvl) => Math.round(u.base * Math.pow(lvl + 1, 1.7));
+  const upgradeCost = (u, lvl) => Math.round(u.base * 2 * Math.pow(lvl + 1, 1.7));
 
   function stats(up) {
     const L = id => Math.min(MAX_LVL, (up && up[id]) || 0);
+    // Level 0 is already a fun rock (the user asked for a small gap between a fresh save and the demo).
     return {
-      throwMax: 390 + 70 * L('arm'),
-      goodKeep: 0.84 + 0.025 * L('rock'),
-      perfectKeep: 0.95 + 0.009 * L('rock'),
-      window: 0.075 + 0.022 * L('hands'),
-      turn: 1.3 + 0.35 * L('aero'),
-      liftK: 0.00025 * L('aero'),
-      farts: 2 + L('farts'),
-      rc: 1 + Math.ceil(L('rc') / 2),
-      magnet: 14 + 10 * L('rc'),
-      break5k: 520 - 70 * L('volume'),
-      break10k: 560 - 70 * L('volume'),
+      throwMax: 470 + 45 * L('arm'),
+      goodKeep: 0.89 + 0.015 * L('rock'),
+      perfectKeep: 0.968 + 0.005 * L('rock'),
+      window: 0.11 + 0.018 * L('hands'),
+      turn: 1.8 + 0.3 * L('aero'),
+      liftK: 0.0003 + 0.00022 * L('aero'),
+      farts: 3 + L('farts'),
+      rc: 2 + Math.floor((L('rc') + 1) / 2),
+      magnet: 20 + 9 * L('rc'),
+      break5k: 380 - 55 * L('volume'),
+      break10k: 520 - 60 * L('volume'),
     };
   }
 
@@ -120,7 +127,7 @@ const SIM = (() => {
     const x0 = 420 + i * CHUNK;
     const era = ERAS[eraIndexAt(x0)];
     const forever = !era.pool;
-    const pool = era.pool || ALL_POOL;
+    const pool = era.pool || foreverPool(dayAt(x0));
     const n = forever ? 2 : 1 + (r() < 0.35 ? 1 : 0);
     for (let k = 0; k < n; k++) {
       const t = pick(r, pool);
@@ -205,13 +212,13 @@ const SIM = (() => {
     }
     if (perfect) {
       if (early) run.pressT = -9;
-      run.vx *= s.perfectKeep;
+      run.vx *= s.perfectKeep * entropy(run);
       run.vy = Math.max(85, -run.vy * 0.72);
       run.perfects++; run.streak++; run.bestStreak = Math.max(run.bestStreak, run.streak);
       if (run.streak % 5 === 0) { run.vx += 25; emit(run, 'text', run.streak + 'X STREAK', '#ffe066'); }
       emit(run, 'skip', perfect && kind === 'water' ? 'PERFECT' : null, '#ffe066');
     } else {
-      run.vx *= s.goodKeep;
+      run.vx *= s.goodKeep * entropy(run);
       run.vy = Math.max(60, -run.vy * 0.55);
       run.streak = 0;
       run.pendingPerfect = s.window; // a late tap still counts
@@ -225,6 +232,8 @@ const SIM = (() => {
     return true;
   }
 
+  // Past today the lake gets rougher the further into the future you go, so forever runs still end.
+  function entropy(run) { return 1 - Math.max(0, dayAt(run.x) - TODAY_DAY) / 1000 * 0.004; }
   function surfaceAt(run, x) {
     for (const e of run.ents) {
       if ((e.t === 'frog' || e.t === 'farm' || e.t === 'crab') && x >= e.x && x <= e.x + e.w) return e.t;
@@ -399,7 +408,7 @@ const SIM = (() => {
 
   function results(run) {
     const days = Math.floor(dayAt(run.x));
-    const earned = run.gems + Math.floor(days / 8) + run.perfects;
+    const earned = run.gems * 2 + Math.floor(days / 6) + run.perfects;
     return {
       days, date: dateAt(run.x), peak: Math.round(priceAt(run.peakAlt)),
       vwap: Math.round(run.nPrice ? run.sumPrice / run.nPrice : 1000),
