@@ -9,4 +9,6 @@ Throw it, skip it across eleven years of crypto history, and try to break $10K. 
 - Fly: SPACE (or tap) as the rock hits the water for a perfect skip. UP/DOWN tilt. X bounces off thin air. C (or SPACE while the rock is in the air) calls RC.
 - Spend gwei at the dock shop between runs: upgrades, Ether Rocks (each costs more than the last), missions and ranks.
 
-Run it: `node serve.mjs` then open http://localhost:5178. By droober.
+Play it: https://skip-to-10k.vercel.app
+
+Run it locally: `node serve.mjs` then open http://localhost:5178. By droober.

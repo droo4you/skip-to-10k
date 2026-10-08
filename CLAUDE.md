@@ -39,7 +39,8 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
 
 ## Deploy + mobile
 - Live at https://skip-to-10k.vercel.app (Vercel project droobers-projects/skip-to-10k). Deployed with `vercel --prod --yes`
-  from this folder; no GitHub repo yet, so pushes do not deploy. .vercelignore keeps tests/tools/docs off the site.
+  from this folder before the repo existed. Now github.com/droo4you/skip-to-10k (public, branch master) is connected:
+  a push deploys. Keep personal paths out of tracked files (a local path with a real name was scrubbed from history). .vercelignore keeps tests/tools/docs off the site.
 - GAME_SPEED 0.8 (user wanted time to enjoy the scenery). Phones: rotate screen in portrait (pauses a run), Android
   fullscreen + landscape lock on first touch. `node tests/mobile.mjs <outdir>` drives an emulated phone over CDP.
 
