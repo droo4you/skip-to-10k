@@ -9,7 +9,7 @@ function humanRun(up, seed, err) {
   let pressAt = null, rnd = seed * 9301 % 233280;
   const rand = () => (rnd = (rnd * 9301 + 49297) % 233280) / 233280;
   while (run.phase !== 'done') {
-    const b = SIM.botInput(run), inp = { tilt: b.tilt, skip: false, fart: b.fart, rc: b.rc };
+    const b = SIM.botInput(run), inp = { tilt: b.tilt, skip: false, bounce: b.bounce, rc: b.rc };
     if (run.vy < 0 && pressAt === null) { const tt = run.alt / Math.max(1, -run.vy); if (tt < 0.3) pressAt = run.t + tt + (rand() * 2 - 1) * err; }
     if (pressAt !== null && run.t >= pressAt) { inp.skip = true; pressAt = null; }
     SIM.step(run, inp); run.events.length = 0;

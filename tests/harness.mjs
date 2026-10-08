@@ -45,7 +45,7 @@ let warps = 0;
 for (let i = 0; i < 60 * 300 && run('G8.screen') === 'fly'; i++) {
   const r = run('SIM.botInput(G8.run)');
   if (r.skip) key('Space');
-  if (r.fart) key('KeyX');
+  if (r.bounce) key('KeyX');
   if (r.rc) key('KeyC');
   if (i % 600 === 300 && warps < 12) { run('G8.run.x += 3600; G8.run.vx = Math.max(G8.run.vx, 400); G8.run.vy = 300'); warps++; }
   if (i === 900) run('G8.run.alt = 580; G8.run.vy = 600');   // try a breakout

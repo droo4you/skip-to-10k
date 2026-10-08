@@ -17,7 +17,7 @@ function play(up, seed, angle = 14, power = 1, bot = SIM.botInput) {
   if (run.phase !== 'done') throw new Error('run never ended, seed ' + seed);
   return SIM.results(run);
 }
-const lazy = () => ({ tilt: 0, skip: false, fart: false, rc: false });
+const lazy = () => ({ tilt: 0, skip: false, bounce: false, rc: false });
 let fail = 0;
 for (const lvl of [0, 1, 2, 3, 4, 5]) {
   const up = Object.fromEntries(SIM.UPGRADES.map(u => [u.id, lvl]));

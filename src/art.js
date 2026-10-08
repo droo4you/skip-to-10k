@@ -81,15 +81,15 @@ const GEM = bmp.bind(null, 'gem', [
   '..oDo..',
   '...o...',
 ], { o: '#3a1f6e', L: '#d6c2ff', D: '#8f6ae0' });
-const BANANA = bmp.bind(null, 'banana', [
-  '.......o.',
-  '......oyo',
-  '.....oyyo',
-  'o...oyyo.',
-  'oyooyyo..',
-  '.oyyyo...',
-  '..ooo....',
-], { o: '#6b4a12', y: '#ffd84a' });
+const BALL = bmp.bind(null, 'ball', [
+  '..oooo..',
+  '.obbwwo.',
+  'obbbbwbo',
+  'owwwwwwo',
+  'orrrrrro',
+  '.orrrro.',
+  '..oooo..',
+], { o: '#22163a', b: '#3a8ad8', w: '#ffffff', r: '#e5487f' });
 const CRAB = bmp.bind(null, 'crab', [
   'o.......o',
   'oo.....oo',
@@ -373,7 +373,7 @@ function drawWater(ctx, eraId, camX, camAlt, time, iceRanges) {
 function drawEnt(ctx, run, e, sx, by, time) {
   switch (e.t) {
     case 'gem': blit(ctx, GEM(), sx, by - 7 + Math.sin(time * 4 + e.x) * 1.5); break;
-    case 'banana': blit(ctx, BANANA(), sx, by - 8 + Math.sin(time * 3 + e.x) * 2); break;
+    case 'ball': blit(ctx, BALL(), sx, by - 8 + Math.abs(Math.sin(time * 4 + e.x)) * -4); break;
     case 'fart': {
       const pulse = Math.sin(time * 5 + e.phase) * 1.5;
       ctx.globalAlpha = 0.85;

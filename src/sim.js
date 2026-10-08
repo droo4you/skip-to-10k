@@ -21,27 +21,27 @@ const SIM = (() => {
   // Eras are the journey: x is time, alt is price.
   const ERAS = [
     { id: 'frontier', day: 0, name: 'FRONTIER', sub: '2015. GENESIS BLOCK',
-      pool: { gem: 5, banana: 2, frog: 2, fart: 1, crab: 1, pump: 0.6, whaleG: 0.6 } },
+      pool: { gem: 5, ball: 2, frog: 2, fart: 1, crab: 1, pump: 0.6, whaleG: 0.6 } },
     { id: 'dao', day: 300, name: 'THE DAO', sub: '2016. CODE IS LAW. MOSTLY',
-      pool: { gem: 4, fork: 3, frog: 1, crab: 2, whaleR: 1, banana: 2, pump: 0.6 } },
+      pool: { gem: 4, fork: 3, frog: 1, crab: 2, whaleR: 1, ball: 2, pump: 0.6 } },
     { id: 'ico', day: 640, name: 'ICO MANIA', sub: '2017. EVERYONE IS A FOUNDER',
-      pool: { gem: 8, pump: 1.6, kitty: 2.5, whaleG: 1, banana: 2, fart: 1 } },
+      pool: { gem: 8, pump: 1.6, kitty: 2.5, whaleG: 1, ball: 2, fart: 1 } },
     { id: 'winter', day: 900, name: 'CRYPTO WINTER', sub: '2018. THE LAKE FROZE',
-      pool: { gem: 3, bear: 3, crab: 2, whaleR: 1, banana: 2, pump: 0.5 } },
+      pool: { gem: 3, bear: 3, crab: 2, whaleR: 1, ball: 2, pump: 0.5 } },
     { id: 'defi', day: 1780, name: 'DEFI SUMMER', sub: '2020. FARM EVERYTHING',
-      pool: { gem: 4, farm: 3, bull: 2, frog: 1, banana: 2, pump: 1 } },
+      pool: { gem: 4, farm: 3, bull: 2, frog: 1, ball: 2, pump: 1 } },
     { id: 'nft', day: 2000, name: 'NFT SEASON', sub: '2021. APE IN',
-      pool: { gem: 4, yacht: 3, kevin: 1.4, bull: 1, banana: 2, whaleG: 1 } },
+      pool: { gem: 4, yacht: 3, kevin: 1.4, bull: 1, ball: 2, whaleG: 1 } },
     { id: 'merge', day: 2550, name: 'THE MERGE', sub: '2022. 99.95% LESS ENERGY',
-      pool: { gem: 4, bat: 3, whaleG: 1, whaleR: 1, banana: 2, crab: 1, frog: 1 } },
+      pool: { gem: 4, bat: 3, whaleG: 1, whaleR: 1, ball: 2, crab: 1, frog: 1 } },
     { id: 'suits', day: 3080, name: 'THE SUITS', sub: '2024. THE ETFS ARRIVE',
-      pool: { gem: 4, suit: 3, whaleG: 1.5, whaleR: 1.5, crab: 2, banana: 2 } },
+      pool: { gem: 4, suit: 3, whaleG: 1.5, whaleR: 1.5, crab: 2, ball: 2 } },
     { id: 'meme', day: 3440, name: 'MEME SEASON', sub: '2025. FARTS AND FROGS',
-      pool: { gem: 4, fart: 4, frog: 2, skrump: 3, pump: 1.5, kevin: 0.6, banana: 2 } },
+      pool: { gem: 4, fart: 4, frog: 2, skrump: 3, pump: 1.5, kevin: 0.6, ball: 2 } },
     { id: 'today', day: TODAY_DAY, name: 'YOU ARE HERE', sub: 'STILL NOT 10K', pool: null },
     { id: 'forever', day: TODAY_DAY + 150, name: 'FOREVER', sub: 'THE WORLD COMPUTER NEVER STOPS', pool: null },
   ];
-  const ALL_POOL = { gem: 5, banana: 2, frog: 1, fart: 1.5, crab: 2, pump: 1, whaleG: 1, whaleR: 1.2, fork: 0.6,
+  const ALL_POOL = { gem: 5, ball: 2, frog: 1, fart: 1.5, crab: 2, pump: 1, whaleG: 1, whaleR: 1.2, fork: 0.6,
     kitty: 0.8, bear: 1, farm: 1, bull: 1, yacht: 1, kevin: 0.5, bat: 1, suit: 1, skrump: 1 };
   for (const e of ERAS) if (e.pool) e.pool.airdrop = 0.45;
   ALL_POOL.airdrop = 0.6;
@@ -67,7 +67,7 @@ const SIM = (() => {
     { id: 'rock', name: 'SMOOTH ROCK', desc: 'LOSE LESS SPEED PER SKIP', base: 30 },
     { id: 'hands', name: 'DIAMOND HANDS', desc: 'WIDER PERFECT SKIP WINDOW', base: 25 },
     { id: 'aero', name: 'AERO', desc: 'TILT HARDER, GLIDE LONGER', base: 30 },
-    { id: 'farts', name: 'BANANA FARTS', desc: '+1 FART BOOST PER RUN', base: 20 },
+    { id: 'bounce', name: 'BOUNCES', desc: '+1 BOUNCE PER RUN', base: 20 },
     { id: 'rc', name: 'RC LIFT', desc: 'MORE RC LIFTS + GEM MAGNET', base: 35 },
     { id: 'volume', name: 'VOLUME', desc: 'NEEDED TO BREAK RESISTANCE', base: 50 },
   ];
@@ -84,7 +84,7 @@ const SIM = (() => {
       window: 0.11 + 0.018 * L('hands'),
       turn: 1.8 + 0.3 * L('aero'),
       liftK: 0.0003 + 0.00022 * L('aero'),
-      farts: 3 + L('farts'),
+      bounces: 3 + L('bounce'),
       rc: 2 + Math.floor((L('rc') + 1) / 2),
       magnet: 20 + 9 * L('rc'),
       break5k: 380 - 55 * L('volume'),
@@ -114,7 +114,7 @@ const SIM = (() => {
   // ---------- entities ----------
   // Every entity: { t, x, alt, w, h } with x the left edge and alt the bottom.
   const SIZES = {
-    gem: [6, 8], banana: [9, 8], fart: [22, 16], pump: [14, 46], whaleG: [58, 14], whaleR: [62, 14],
+    gem: [6, 8], ball: [9, 8], fart: [22, 16], pump: [14, 46], whaleG: [58, 14], whaleR: [62, 14],
     crab: [150, 6], suit: [16, 30], kevin: [24, 20], yacht: [72, 22], skrump: [12, 12], frog: [28, 4],
     kitty: [16, 14], airdrop: [12, 12], bear: [44, 22], bull: [26, 18], fork: [22, 92], bat: [16, 10], farm: [64, 6],
   };
@@ -141,9 +141,9 @@ const SIM = (() => {
         }
         continue;
       }
-      if (onIce(x) && !['gem', 'banana', 'bat', 'bear'].includes(t)) continue;
+      if (onIce(x) && !['gem', 'ball', 'bat', 'bear'].includes(t)) continue;
       let alt = 0;
-      if (t === 'banana') alt = 30 + r() * 220;
+      if (t === 'ball') alt = 30 + r() * 220;
       else if (t === 'fart') alt = 6 + r() * 50;
       else if (t === 'bat') alt = 260 + r() * 460;
       else if (t === 'whaleG' || t === 'whaleR') alt = -6;
@@ -165,7 +165,7 @@ const SIM = (() => {
       seed: seed >>> 0, s, t: 0,
       x: DOCK_X, alt: DOCK_ALT, vx: 0, vy: 0, spin: 0,
       phase: 'aim', // aim -> fly -> sink -> done
-      farts: s.farts, rc: s.rc, rcT: 0,
+      bounces: s.bounces, rc: s.rc, rcT: 0,
       skips: 0, perfects: 0, streak: 0, bestStreak: 0, gems: 0,
       peakAlt: DOCK_ALT, broke5k: false, broke10k: false, sumPrice: 0, nPrice: 0,
       pressT: -9, pendingPerfect: 0, sinkT: 0, iceSlide: false, lastSkipKind: '',
@@ -245,7 +245,7 @@ const SIM = (() => {
     const vx = run.vx, vy = run.vy;
     switch (e.t) {
       case 'gem': e.used = true; run.gems++; emit(run, 'gem'); break;
-      case 'banana': e.used = true; run.farts++; emit(run, 'banana', '+1 FART', '#ffe066'); break;
+      case 'ball': e.used = true; run.bounces++; emit(run, 'ball', '+1 BOUNCE', '#7fe3ff'); break;
       case 'fart': e.used = true; run.vy = Math.max(vy + 240, 250); emit(run, 'fart', 'MINI PUMP', '#9ff07a'); break;
       case 'pump':
         if (run.alt < e.alt + 28) return; // only the nozzle on top launches
@@ -273,7 +273,7 @@ const SIM = (() => {
         e.used = true;
         const roll = Math.floor(e.phase / 6.28 * 4);
         if (roll === 0) { run.gems += 10; emit(run, 'airdrop', 'AIRDROP +10', '#ffe066'); }
-        else if (roll === 1) { run.farts++; emit(run, 'airdrop', 'AIRDROP +1 FART', '#9ff07a'); }
+        else if (roll === 1) { run.bounces++; emit(run, 'airdrop', 'AIRDROP +1 BOUNCE', '#7fe3ff'); }
         else if (roll === 2) { run.rc++; emit(run, 'airdrop', 'AIRDROP +1 RC', '#7fe3ff'); }
         else emit(run, 'scam', 'IT WAS A SCAM', '#ff6b6b');
         break;
@@ -299,7 +299,7 @@ const SIM = (() => {
     }
   }
 
-  // input: { tilt: -1..1, skip: bool (edge), fart: bool (edge), rc: bool (edge) }
+  // input: { tilt: -1..1, skip: bool (edge), bounce: bool (edge), rc: bool (edge) }
   function step(run, input) {
     run.t += DT;
     if (run.phase === 'sink') {
@@ -325,11 +325,11 @@ const SIM = (() => {
       }
     }
     run.pendingPerfect = Math.max(0, run.pendingPerfect - DT);
-    if (input.fart && run.farts > 0) {
-      run.farts--;
-      const sp = speed(run) || 1;
-      run.vx += 150 * Math.max(0.5, run.vx / sp); run.vy = Math.max(run.vy, 0) + 170;
-      emit(run, 'fart', 'PFFT', '#9ff07a');
+    if (input.bounce && run.bounces > 0) {
+      // a skip off thin air: stops the fall and kicks the rock back up
+      run.bounces--;
+      run.vy = Math.max(run.vy * 0.3, 0) + 300; run.vx += 140;
+      emit(run, 'bounce', 'BOING', '#7fe3ff');
     }
     if (input.rc && run.rc > 0 && run.rcT <= 0) {
       run.rc--; run.rcT = 0.55;
@@ -424,7 +424,7 @@ const SIM = (() => {
     return {
       tilt: run.alt > 220 && run.vy < -150 ? 0.4 : 0,
       skip: nearWater,
-      fart: run.vx < 160 && run.farts > 0 && run.alt < 40,
+      bounce: run.vx < 160 && run.bounces > 0 && run.alt < 40,
       rc: run.vx < 120 && run.rc > 0 && sp > 0,
     };
   }

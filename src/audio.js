@@ -59,7 +59,8 @@ const Audio8 = {
       case 'whale': T('sine', 160, 90, 0.5, 0.25); this.noise(0.4, 0.1, 1500, 0.1); T('square', 600, 1200, 0.2, 0.08, 0.15); break;
       case 'dump': T('square', 600, 80, 0.4, 0.16); this.noise(0.2, 0.15, 0, 0, 600); break;
       case 'gem': T('square', 1320 + Math.random() * 80, 1320, 0.05, 0.08); T('square', 1980, 1980, 0.06, 0.07, 0.04); break;
-      case 'banana': [660, 880, 990].forEach((f, i) => T('triangle', f, f, 0.06, 0.13, i * 0.05)); break;
+      case 'bounce': T('sine', 180, 720, 0.18, 0.28); T('square', 360, 900, 0.08, 0.07, 0.05); break;
+      case 'ball': [660, 880, 990].forEach((f, i) => T('triangle', f, f, 0.06, 0.13, i * 0.05)); break;
       case 'rc': T('sine', 400, 1100, 0.25, 0.22); T('sine', 600, 1400, 0.2, 0.1, 0.08); break;
       case 'bonk': T('square', 180, 110, 0.12, 0.18); this.noise(0.06, 0.12, 400); break;
       case 'kevin': [523, 659, 784, 659, 1047].forEach((f, i) => T('square', f, f, 0.07, 0.11, i * 0.06)); break;

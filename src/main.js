@@ -13,6 +13,7 @@ function loadSave() {
   try { s = Object.assign(fresh, JSON.parse(localStorage.getItem(SAVE_KEY)) || {}); } catch {}
   if (!s.rocks.length) { const k = 1 + Math.floor(Math.random() * 99); s.rocks = [k]; s.rock = k; }
   if (!s.rocks.includes(s.rock)) s.rock = s.rocks[0];
+  if (s.up.farts) { s.up.bounce = s.up.farts; delete s.up.farts; } // v0.5: farts became bounces
   return s;
 }
 const save = loadSave();
@@ -34,7 +35,7 @@ window.__game = G8;
 
 // ---------- input ----------
 const keys = new Set();
-const edge = { skip: false, fart: false, rc: false };
+const edge = { skip: false, bounce: false, rc: false };
 const ACTION_KEYS = ['Space', 'Enter', 'KeyZ'];
 addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(e.key) || e.code === 'Space') e.preventDefault();
@@ -61,7 +62,7 @@ function onKey(code) {
     if (code === 'Escape' || code === 'KeyP') { G8.paused = !G8.paused; return; }
     if (G8.paused) return;
     if (ACTION_KEYS.includes(code)) edge.skip = true;
-    if (code === 'KeyX' || code === 'ShiftLeft' || code === 'ShiftRight') edge.fart = true;
+    if (code === 'KeyX' || code === 'ShiftLeft' || code === 'ShiftRight') edge.bounce = true;
     if (code === 'KeyC' || code === 'KeyR') edge.rc = true;
     return;
   }
@@ -81,7 +82,7 @@ function canvasPt(e) {
 const pointers = new Map(); // id -> {x, y, btn}
 const TOUCH_BTNS = {
   up: [8, 150, 52, 48], down: [8, 204, 52, 48],
-  fart: [334, 214, 58, 38], rc: [334, 170, 58, 38], skip: [398, 170, 74, 82],
+  bounce: [334, 214, 58, 38], rc: [334, 170, 58, 38], skip: [398, 170, 74, 82],
 };
 function btnAt(p) {
   for (const k in TOUCH_BTNS) { const [x, y, w, h] = TOUCH_BTNS[k]; if (p.x >= x && p.x < x + w && p.y >= y && p.y < y + h) return k; }
@@ -89,7 +90,7 @@ function btnAt(p) {
 }
 const hitRect = (p, [x, y, w, h]) => p.x >= x && p.x < x + w && p.y >= y && p.y < y + h;
 const SHOP_BTN = [W - 56, 4, 50, 13];
-const BOOST_BTNS = { fart: [6, H - 30, 76, 24], rc: [88, H - 30, 76, 24] };
+const BOOST_BTNS = { bounce: [6, H - 30, 76, 24], rc: [88, H - 30, 76, 24] };
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); Audio8.init();
   if (e.pointerType === 'touch') G8.touch = true;
@@ -116,7 +117,7 @@ cv.addEventListener('pointerdown', e => {
     if (!G8.touch) for (const k in BOOST_BTNS) if (hitRect(p, BOOST_BTNS[k])) b = k;
     pointers.set(e.pointerId, { ...p, btn: b });
     if (!b || b === 'skip') edge.skip = true;
-    if (b === 'fart') edge.fart = true;
+    if (b === 'bounce') edge.bounce = true;
     if (b === 'rc') edge.rc = true;
   }
 });
@@ -212,7 +213,7 @@ function updateAim(dt) {
 
 // ---------- how to play: a narrated demo run ----------
 // The bot plays a well-upgraded run while captions explain what is happening. Nothing is saved.
-const TUT_UP = { arm: 2, rock: 2, hands: 2, aero: 2, farts: 1, rc: 2, volume: 2 };
+const TUT_UP = { arm: 2, rock: 2, hands: 2, aero: 2, bounce: 1, rc: 2, volume: 2 };
 // Seed 55 was picked offline (with TUT_UP, about two upgrades each): in ~90s it gets rejected at the ATH, breaks it,
 // farts, calls RC, bounces off Kevin and reaches today.
 const TUT_SEED = 55;
@@ -237,7 +238,7 @@ const TUT_CAPS = {
   whale: ['up', 'PUMPS, BULLS, GREEN WHALES AND KEVIN LAUNCH YOU UP'],
   kevin: ['up', 'PUMPS, BULLS, GREEN WHALES AND KEVIN LAUNCH YOU UP'],
   dump: ['dump', 'RED WHALES AND BEARS DUMP YOU. DODGE THEM'],
-  fart: ['fart', 'X OR THE FART BUTTON: BANANA FART BOOST'],
+  bounce: ['bounce', 'X OR THE BOUNCE BUTTON: BOUNCE OFF THIN AIR'],
   rc: ['rc', 'C OR THE RC BUTTON: RC LIFTS THE ROCK'],
   rejected: ['rej', 'THE ATH LINE REJECTS SLOW ROCKS. UPGRADE VOLUME'],
   breakout: ['brk', 'BROKE THE ATH. NOW IT IS SUPPORT'],
@@ -301,7 +302,7 @@ function toAim() {
   G8.camX = HAND_X - 150; G8.camAlt = 0; G8.texts = []; G8.parts = []; G8.banner = null; G8.paused = false;
   G8.news = null; G8.newsI = 0; G8.bubble = null; G8.bubbleCd = 5; G8.slow = 0;
   G8.rc = { x: HAND_X - 30, alt: 86 };
-  edge.skip = edge.fart = edge.rc = false;
+  edge.skip = edge.bounce = edge.rc = false;
   pointers.clear();
   Audio8.sfx('menu');
 }
@@ -328,7 +329,7 @@ function finishRun() {
   persist();
   r.quip = quipFor(r);
   r.candles = run.candles.slice();
-  r.leftFarts = run.farts; r.leftRc = run.rc;
+  r.leftBounces = run.bounces; r.leftRc = run.rc;
   r.at = G8.time;
   G8.res = r; G8.screen = 'results';
   if (r.done.length) setTimeout(() => Audio8.sfx('mission'), 500);
@@ -374,8 +375,9 @@ function handleEvents(run) {
       case 'sink': Audio8.sfx('sink'); splash(ev.x, 16, true); break;
       case 'froze': Audio8.sfx('ice'); break;
       case 'gem': Audio8.sfx('gem'); burst(ev.x, ev.alt, 4, '#d6c2ff', 40); break;
-      case 'banana': Audio8.sfx('banana'); break;
-      case 'fart': Audio8.sfx('fart'); burst(ev.x - 6, ev.alt, 10, '#9ff07a', 50, 'puff'); say('rc', 'fart', 0.4); break;
+      case 'ball': Audio8.sfx('ball'); break;
+      case 'fart': Audio8.sfx('fart'); burst(ev.x - 6, ev.alt, 10, '#9ff07a', 50, 'puff'); break;
+      case 'bounce': Audio8.sfx('bounce'); bounceRing(ev.x, ev.alt); say('rc', 'bounce', 0.35); break;
       case 'pump': Audio8.sfx('pump'); G8.shake = 3; break;
       case 'whale': Audio8.sfx('whale'); splash(ev.x, 18, true); break;
       case 'dump': Audio8.sfx('dump'); G8.shake = 5; say('rc', 'dump', 0.7); break;
@@ -424,11 +426,11 @@ function update(dt) {
     acc += Math.min(sdt, 0.1);
     G8.hintT += dt;
     if (DEMO || G8.tut) demoInput();
-    const input = { tilt: G8.tut ? SIM.botInput(run).tilt : tiltInput(), skip: edge.skip, fart: edge.fart, rc: edge.rc };
-    edge.skip = edge.fart = edge.rc = false;
+    const input = { tilt: G8.tut ? SIM.botInput(run).tilt : tiltInput(), skip: edge.skip, fart: edge.bounce, rc: edge.rc };
+    edge.skip = edge.bounce = edge.rc = false;
     while (acc >= SIM.DT) {
       SIM.step(run, G8.tut ? SIM.botInput(run) : input);
-      input.skip = input.fart = input.rc = false;
+      input.skip = input.bounce = input.rc = false;
       acc -= SIM.DT;
     }
     if (G8.tut) tutEvents(run);
@@ -672,18 +674,18 @@ function drawHUD() {
     const by = H - 12;
     if (!G8.touch && !G8.tut) {
       const want = boostWanted(run);
-      drawBoostBtn(BOOST_BTNS.fart, 'X', 'FART', run.farts, '#3fa86a', want);
+      drawBoostBtn(BOOST_BTNS.bounce, 'X', 'BOUNCE', run.bounces, '#7b55c6', want);
       drawBoostBtn(BOOST_BTNS.rc, 'C', 'RC LIFT', run.rc, '#1cb6d8', want);
     }
-    if (boostWanted(run) && (run.farts || run.rc) && !G8.tut && (G8.time * 3 | 0) % 2 === 0) {
-      const t = G8.touch ? (run.rc ? 'TAP RC!' : 'TAP FART!') : (run.rc ? 'PRESS C: RC LIFT!' : 'PRESS X: FART!');
+    if (boostWanted(run) && (run.bounces || run.rc) && !G8.tut && (G8.time * 3 | 0) % 2 === 0) {
+      const t = G8.touch ? (run.rc ? 'TAP RC!' : 'TAP BOUNCE!') : (run.rc ? 'PRESS C: RC LIFT!' : 'PRESS X: BOUNCE!');
       drawTextOutlined(ctx, t, sx(run.x), Math.max(40, sy(run.alt) - 34), '#7fe3ff', 1);
     }
     if (run.streak >= 2) drawTextOutlined(ctx, run.streak + 'X STREAK', W / 2, 44, run.streak >= 5 ? '#ff9f3a' : '#ffe066', 1);
     if (save.runs < 3 && G8.hintT < 12 && !G8.tut) {
       const tip = G8.hintT < 4 ? (G8.touch ? 'TAP AS THE ROCK HITS THE WATER' : 'TAP SPACE AS THE ROCK HITS THE WATER')
         : G8.hintT < 8 ? (G8.touch ? 'HOLD UP OR DOWN TO TILT' : 'UP AND DOWN TILT THE ROCK')
-        : (G8.touch ? 'FART AND RC BUTTONS FOR BOOSTS' : 'X TO FART. C TO CALL RC');
+        : (G8.touch ? 'BOUNCE AND RC BUTTONS FOR BOOSTS' : 'X TO BOUNCE. C TO CALL RC');
       drawTextOutlined(ctx, tip, W / 2, 104, '#fff', 1);
     }
   }
@@ -697,7 +699,11 @@ function drawHUD() {
   }
 }
 // boosts are worth it when the rock is slowing down near the water
-function boostWanted(run) { return run.phase === 'fly' && run.vx < 240 && run.alt < 70 && (run.farts > 0 || run.rc > 0) && run.rcT <= 0; }
+function boostWanted(run) { return run.phase === 'fly' && run.vx < 240 && run.alt < 70 && (run.bounces > 0 || run.rc > 0) && run.rcT <= 0; }
+// a ring of sparks where the rock bounced off thin air
+function bounceRing(x, alt) {
+  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; G8.parts.push({ x, alt, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90, t: 0, life: 0.35, color: '#7fe3ff', kind: 'puff' }); }
+}
 function drawBoostBtn([x, y, w, h], keyLbl, name, n, col, glow) {
   const lit = n > 0 && glow && (G8.time * 4 | 0) % 2 === 0;
   px(ctx, '#22163a', x - 1, y - 1, w + 2, h + 2);
@@ -764,8 +770,8 @@ function drawTouchButtons() {
   if (!G8.touch || G8.screen !== 'fly') return;
   const run = G8.run;
   const held = new Set([...pointers.values()].map(q => q.btn));
-  const lab = { up: '^', down: 'V', fart: 'FART ' + run.farts, rc: 'RC ' + run.rc, skip: 'SKIP' };
-  const col = { up: '#7b55c6', down: '#7b55c6', fart: '#3fa86a', rc: '#1cb6d8', skip: '#e5487f' };
+  const lab = { up: '^', down: 'V', bounce: 'BOUNCE ' + run.bounces, rc: 'RC ' + run.rc, skip: 'SKIP' };
+  const col = { up: '#7b55c6', down: '#7b55c6', bounce: '#7b55c6', rc: '#1cb6d8', skip: '#e5487f' };
   for (const k in TOUCH_BTNS) {
     const [x, y, w, h] = TOUCH_BTNS[k];
     ctx.globalAlpha = held.has(k) ? 0.75 : 0.42;
@@ -846,7 +852,7 @@ function drawResults() {
     drawText(ctx, 'MISSIONS', x + 12, my, '#7a4a8a'); my += 10;
     META.active(save).forEach(m => { drawText(ctx, '- ' + m.text, x + 12, my, '#8a7aa8'); my += 9; });
   }
-  if (r.leftFarts + r.leftRc > 0) drawText(ctx, 'UNUSED: ' + r.leftFarts + ' FARTS, ' + r.leftRc + ' RC LIFTS. USE THEM WHEN YOU SLOW DOWN', x + 12, y + h - 60, '#e0a020');
+  if (r.leftBounces + r.leftRc > 0) drawText(ctx, 'UNUSED: ' + r.leftBounces + ' BOUNCES, ' + r.leftRc + ' RC LIFTS. USE THEM WHEN YOU SLOW DOWN', x + 12, y + h - 60, '#e0a020');
   drawTextC(ctx, '"' + r.quip + '"', x + w / 2 - 20, y + h - 46, '#e5487f');
   drawFrameAt(ctx, 'wave', x + w - 30, y + h - 4, 0);
   drawRC(x + w - 58, y + h - 30 + Math.sin(G8.time * 4) * 2, 'rcFront');
@@ -993,7 +999,7 @@ const DEMO = (() => { try { const q = new URLSearchParams(location.search); retu
 function demoStart() {
   if (DEMO.touch) G8.touch = true;
   if (['shop', 'rocks', 'missions'].includes(DEMO.screen)) {
-    save.gwei = 1234; save.up = { arm: 3, rock: 2, hands: 1, farts: 4 }; save.rocks = [7, 42, 3, 88, 15, 61]; save.rock = 42; save.missions = [0, 1, 2, 3, 5];
+    save.gwei = 1234; save.up = { arm: 3, rock: 2, hands: 1, bounce: 4 }; save.rocks = [7, 42, 3, 88, 15, 61]; save.rock = 42; save.missions = [0, 1, 2, 3, 5];
     toShop(); G8.shopTab = ['shop', 'rocks', 'missions'].indexOf(DEMO.screen); return;
   }
   if (DEMO.screen === 'tut') { startTut(); return; }
@@ -1010,7 +1016,7 @@ function demoStart() {
     finishRun(); G8.res.at = -9;
   }
 }
-function demoInput() { const b = SIM.botInput(G8.run); if (b.skip) edge.skip = true; if (b.fart) edge.fart = true; }
+function demoInput() { const b = SIM.botInput(G8.run); if (b.skip) edge.skip = true; if (b.bounce) edge.bounce = true; }
 
 // ---------- boot ----------
 function fit() {

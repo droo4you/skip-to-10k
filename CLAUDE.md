@@ -1,6 +1,6 @@
 # Skip to 10K
 
-Droober & RC rock-skipping launcher. Inspired by Pebble Dash (timed skips) and Monkey Flight (limited fart boosts,
+Droober & RC rock-skipping launcher. Inspired by Pebble Dash (timed skips) and Monkey Flight (limited boosts,
 upgrade between runs, missions), themed on Ether Rock and crypto history. Sibling of
 `../droober-two-places` (sprites + font copied from there). Vanilla canvas, zero deps, no build step.
 Classic `<script>` tags share globals; load order in index.html matters. `node serve.mjs` serves port 5178.
@@ -30,8 +30,10 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
 - `src/audio.js` synthesized sfx + one loop. `src/font.js`, `src/sprites.js`, `assets/sprites.png` come from droober-two-places.
 
 ## Boosts
-- The user never found C for RC. Desktop now shows big clickable X FART / C RC LIFT buttons that flash, plus a
-  prompt over the rock, whenever the rock is slow and low. Results list boosts left unused. Start: 3 farts, 2 RC.
+- The user never found C for RC. Desktop now shows big clickable X BOUNCE / C RC LIFT buttons that flash, plus a
+  prompt over the rock, whenever the rock is slow and low. Results list boosts left unused. Start: 3 bounces, 2 RC.
+- v0.5: the user asked to swap the fart boost for bounces (X = skip off thin air, beach-ball pickups).
+  The fartcoin clouds on the lake (MINI PUMP) stayed: they were in the original brief.
 
 ## Working rules
 - After any sim change: `node tests/sim.mjs` (perfect-tap bot balance table) and `node tests/harness.mjs`
