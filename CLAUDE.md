@@ -37,6 +37,12 @@ Classic `<script>` tags share globals; load order in index.html matters. `node s
 - SPACE doubles as RC LIFT (user request) but only while the rock is in the air (`spaceCallsRc`): near the water
   it is a skip tap only, so skip timing never burns RC. harness.mjs asserts X, C and SPACE actually fire.
 
+## Deploy + mobile
+- Live at https://skip-to-10k.vercel.app (Vercel project droobers-projects/skip-to-10k). Deployed with `vercel --prod --yes`
+  from this folder; no GitHub repo yet, so pushes do not deploy. .vercelignore keeps tests/tools/docs off the site.
+- GAME_SPEED 0.8 (user wanted time to enjoy the scenery). Phones: rotate screen in portrait (pauses a run), Android
+  fullscreen + landscape lock on first touch. `node tests/mobile.mjs <outdir>` drives an emulated phone over CDP.
+
 ## Working rules
 - After any sim change: `node tests/sim.mjs` (perfect-tap bot balance table) and `node tests/harness.mjs`
   (stubbed DOM, plays every screen). After copy or meta changes: `node tests/meta.mjs` (every string renders in the
