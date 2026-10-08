@@ -10,8 +10,8 @@ const listeners = {};
 const store = {};
 const sandbox = {
   console, Math, Date, JSON, Number, String, Array, Object, Map, Set, Proxy, Error, parseInt, Symbol,
-  document: { getElementById: () => gameCanvas, createElement: canvas },
-  addEventListener: (k, f) => (listeners[k] = f), innerWidth: 960, innerHeight: 540,
+  document: { getElementById: () => gameCanvas, createElement: canvas, body: { classList: { toggle: noop } }, documentElement: {} },
+  addEventListener: (k, f) => (listeners[k] = f), innerWidth: 960, innerHeight: 540, screen: {},
   matchMedia: () => ({ matches: false }), localStorage: { getItem: k => store[k] ?? null, setItem: (k, v) => (store[k] = v) },
   performance: { now: () => 0 }, requestAnimationFrame: noop, setInterval: noop, setTimeout: f => f(), URLSearchParams,
   Image: function () { this.complete = true; },

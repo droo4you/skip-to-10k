@@ -22,6 +22,8 @@ Audio8.muted = save.muted; Audio8.musicOn = save.music;
 
 // ---------- state ----------
 const DOCK_START = -150, DOCK_END = 40;
+// The user asked for a slower game to enjoy the scenery and timeline easter eggs. Sim runs at 0.8x real time.
+const GAME_SPEED = 0.8;
 const G8 = {
   screen: 'title', time: 0, run: null,
   camX: 0, camAlt: 0, shake: 0, slow: 0,
@@ -94,7 +96,7 @@ const SHOP_BTN = [W - 56, 4, 50, 13];
 const BOOST_BTNS = { bounce: [6, H - 30, 76, 24], rc: [88, H - 30, 76, 24] };
 cv.addEventListener('pointerdown', e => {
   e.preventDefault(); Audio8.init();
-  if (e.pointerType === 'touch') G8.touch = true;
+  if (e.pointerType === 'touch') { G8.touch = true; goLandscape(); }
   try { cv.setPointerCapture(e.pointerId); } catch {}
   const p = canvasPt(e);
   const s = G8.screen;
@@ -265,7 +267,7 @@ function updateTut(dt) {
     return;
   }
   // the demo makes its point in about a minute; cut it there
-  if (!T.end && T.t > 70 && G8.run.phase === 'fly') { T.res = SIM.results(G8.run); T.end = 0.001; T.cut = true; }
+  if (!T.end && T.t > 88 && G8.run.phase === 'fly') { T.res = SIM.results(G8.run); T.end = 0.001; T.cut = true; }
   if (T.end) { T.end += dt; if (T.end > 4.5) endTut(); }
 }
 function tutEvents(run) {
@@ -408,8 +410,8 @@ let acc = 0;
 function update(dt) {
   G8.time += dt;
   const run = G8.run;
-  if (G8.banner) { G8.banner.t += dt; if (G8.banner.t > 3) G8.banner = null; }
-  if (G8.news) { G8.news.t += dt; if (G8.news.t > 4) G8.news = null; }
+  if (G8.banner) { G8.banner.t += dt; if (G8.banner.t > 3.8) G8.banner = null; }
+  if (G8.news) { G8.news.t += dt; if (G8.news.t > 5.5) G8.news = null; }
   if (G8.bubble) { G8.bubble.t += dt; if (G8.bubble.t > 2.2) G8.bubble = null; }
   shopFlash = Math.max(0, shopFlash - dt);
   G8.shake = Math.max(0, G8.shake - dt * 20);
@@ -421,7 +423,7 @@ function update(dt) {
     G8.rc.alt += (86 + Math.sin(G8.time * 3) * 3 - G8.rc.alt) * Math.min(1, dt * 6);
   }
   if (G8.screen === 'fly' && !G8.paused) {
-    let sdt = dt;
+    let sdt = dt * GAME_SPEED;
     if (G8.slow > 0) { G8.slow -= dt; sdt = dt * 0.35; }
     if (G8.tut) sdt *= 1.3;
     acc += Math.min(sdt, 0.1);
@@ -693,7 +695,7 @@ function drawHUD() {
   drawNews();
   if (G8.banner) {
     // slides down, holds, slides back up (no alpha: stacked outlines smear when faded)
-    const b = G8.banner, k = Math.min(1, b.t * 4, (3 - b.t) * 4);
+    const b = G8.banner, k = Math.min(1, b.t * 4, (3.8 - b.t) * 4);
     const y = Math.round(-40 + 102 * (1 - Math.pow(1 - Math.max(0, k), 3)));
     drawTextOutlined(ctx, b.title, W / 2, y, '#ffe066', 3);
     drawTextOutlined(ctx, b.sub, W / 2, y + 26, '#ffffff', 1);
@@ -722,7 +724,7 @@ function drawBoostBtn([x, y, w, h], keyLbl, name, n, col, glow) {
 function drawNews() {
   const n = G8.news;
   if (!n) return;
-  const k = Math.min(1, n.t * 5, (4 - n.t) * 5);
+  const k = Math.min(1, n.t * 5, (5.5 - n.t) * 5);
   const y = 20 + Math.round(-12 * (1 - Math.max(0, k)));
   px(ctx, '#22163a', 0, y, W, 11);
   px(ctx, '#e5487f', 0, y, 58, 11);
@@ -781,7 +783,7 @@ function drawTouchButtons() {
   const col = { up: '#7b55c6', down: '#7b55c6', bounce: '#7b55c6', rc: '#1cb6d8', skip: '#e5487f' };
   for (const k in TOUCH_BTNS) {
     const [x, y, w, h] = TOUCH_BTNS[k];
-    ctx.globalAlpha = held.has(k) ? 0.75 : 0.42;
+    ctx.globalAlpha = held.has(k) ? 0.7 : 0.3;
     px(ctx, '#22163a', x, y + 2, w, h); px(ctx, col[k], x, y, w, h - 2);
     ctx.globalAlpha = 1;
     const big = k === 'skip' || k === 'up' || k === 'down';
@@ -1025,14 +1027,33 @@ function demoStart() {
 }
 function demoInput() { const b = SIM.botInput(G8.run); if (b.skip) edge.skip = true; if (b.bounce) edge.bounce = true; }
 
+// ---------- mobile ----------
+// Android: go fullscreen and lock landscape on the first touch. iOS can't, so index.html shows a rotate screen.
+let triedLandscape = false;
+function goLandscape() {
+  if (triedLandscape) return;
+  triedLandscape = true;
+  const el = document.documentElement;
+  try {
+    const p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : null;
+    if (p && p.then) p.then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape')).catch(() => {});
+  } catch {}
+}
+function checkPortrait() {
+  const upright = G8.touch && innerHeight > innerWidth;
+  document.body.classList.toggle('portrait', upright);
+  if (upright && G8.screen === 'fly' && !G8.tut) G8.paused = true;
+}
+
 // ---------- boot ----------
 function fit() {
   const s = Math.max(1, Math.min(innerWidth / W, innerHeight / H));
   const k = s >= 2 ? Math.floor(s) : s;
   cv.style.width = W * k + 'px'; cv.style.height = H * k + 'px';
 }
-addEventListener('resize', fit); fit();
+addEventListener('resize', () => { fit(); checkPortrait(); }); fit();
 if (matchMedia('(pointer: coarse)').matches) G8.touch = true;
+checkPortrait();
 SPRITES = new Image();
 SPRITES.src = 'assets/sprites.png';
 let last = performance.now();
